@@ -133,7 +133,7 @@ export default function Home() {
     <main className="min-h-screen bg-white text-gray-900">
       <div className="max-w-6xl mx-auto px-6 py-16">
         <header className="mb-12">
-          <GreatGrantsLogo tagline="Radar" className="text-brand-700 h-9 mb-6" />
+          <GreatGrantsLogo className="text-brand-700 h-9 mb-6" />
           <h1 className="font-display text-5xl text-gray-900 tracking-tight mb-3">Grant Radar</h1>
           <p className="text-gray-600 text-lg max-w-2xl">
             Enter a parent company. We&apos;ll surface the nonprofits they founded or are structurally
@@ -147,7 +147,7 @@ export default function Home() {
             type="text"
             value={parentName}
             onChange={(e) => setParentName(e.target.value)}
-            placeholder="Enter a parent company (e.g. Chick-fil-A, Walmart, Patagonia)"
+            placeholder="Enter a parent company, foundation, or family office"
             className="flex-1 bg-white border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600 transition-colors"
             disabled={loading}
           />
