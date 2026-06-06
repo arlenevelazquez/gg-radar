@@ -202,6 +202,9 @@ export default function Home() {
       : result.entities
     : [];
 
+  // The root org is the hierarchy node with no parentName (the searched entity).
+  const parentOrgName = result?.orgHierarchy?.find((n) => !n.parentName)?.name ?? null;
+
   return (
     <main className="min-h-screen bg-white text-gray-900">
       <div className="max-w-5xl mx-auto px-6 py-16">
@@ -315,12 +318,32 @@ export default function Home() {
                   </p>
                 )}
 
-                {visibleEntities.map((entity, i) => (
+                {visibleEntities.map((entity, i) => {
+                  const isParent = entity.name === parentOrgName;
+                  return (
                   <div
                     key={i}
-                    className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm"
+                    className={`rounded-xl p-6 shadow-sm border ${
+                      isParent
+                        ? "bg-brand-50 border-brand-100"
+                        : "bg-white border-gray-200"
+                    }`}
                   >
-                    <h2 className="font-display text-2xl text-gray-900 mb-1">{entity.name}</h2>
+                    <div className="flex items-center gap-3 mb-1 flex-wrap">
+                      <h2 className="font-display text-2xl text-gray-900">{entity.name}</h2>
+                      {isParent && (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-brand-600 text-white shrink-0">
+                          <svg className="w-3 h-3" viewBox="0 0 12 12" fill="currentColor">
+                            <circle cx="6" cy="3" r="2" />
+                            <circle cx="2.5" cy="9" r="1.5" />
+                            <circle cx="9.5" cy="9" r="1.5" />
+                            <line x1="6" y1="5" x2="2.5" y2="7.5" stroke="currentColor" strokeWidth="1" />
+                            <line x1="6" y1="5" x2="9.5" y2="7.5" stroke="currentColor" strokeWidth="1" />
+                          </svg>
+                          Parent Organization
+                        </span>
+                      )}
+                    </div>
                     <p className="text-gray-600 text-sm mb-5">{entity.profile.mission}</p>
 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -417,7 +440,8 @@ export default function Home() {
                       </p>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
