@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { GreatGrantsLogo } from "@/components/foundations/logo/great-grants-logo";
 
 interface ParentProfile {
@@ -92,11 +92,22 @@ function locationText(loc?: Nonprofit["location"]): string {
   return parts.join(", ");
 }
 
+function nonprofitAnchorId(name: string): string {
+  return `np-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+}
+
 export default function Home() {
   const [parentName, setParentName] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<RadarResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Defer empty-input gating until after mount so SSR/CSR render the same
+  // initial `disabled` value (Turbopack + extensions can otherwise diverge here).
+  const hasMounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -153,7 +164,7 @@ export default function Home() {
           />
           <button
             type="submit"
-            disabled={loading || !parentName.trim()}
+            disabled={loading || (hasMounted && !parentName.trim())}
             className="bg-brand-600 hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium px-6 py-3 rounded-lg transition-colors whitespace-nowrap"
           >
             Run Grant Radar
@@ -224,6 +235,11 @@ export default function Home() {
               )}
             </section>
 
+            {/* Ecosystem map */}
+            {result.nonprofits.length > 0 && (
+              <EcosystemMap parent={result.parent} nonprofits={result.nonprofits} />
+            )}
+
             {/* Nonprofit cards */}
             {result.nonprofits.length === 0 ? (
               <div className="text-center py-12 bg-gray-50 border border-gray-200 rounded-xl">
@@ -282,9 +298,75 @@ export default function Home() {
   );
 }
 
+function EcosystemMap({
+  parent,
+  nonprofits,
+}: {
+  parent: ParentProfile;
+  nonprofits: Nonprofit[];
+}) {
+  const n = nonprofits.length;
+  // With flex-1 children, the center of the leftmost child sits at 1/(2n)
+  // of the row width, and the rightmost at (2n-1)/(2n). So the horizontal
+  // connector spans the row inset by 50/n % on each side.
+  const sideInset = `${50 / n}%`;
+  return (
+    <section className="bg-white border border-gray-200 rounded-2xl p-6">
+      <p className="text-xs uppercase tracking-widest text-gray-500 mb-5 text-center">
+        Ecosystem map
+      </p>
+      <div className="overflow-x-auto">
+        <div className="flex flex-col items-stretch min-w-[480px]">
+          {/* Parent node */}
+          <div className="flex justify-center">
+            <div className="bg-brand-50 border border-brand-200 rounded-lg px-4 py-2 text-center max-w-xs">
+              <p className="text-[10px] uppercase tracking-widest text-brand-700 font-medium mb-0.5">
+                {PARENT_TYPE_LABEL[parent.type]}
+              </p>
+              <p className="font-display text-base text-gray-900 leading-snug">{parent.name}</p>
+            </div>
+          </div>
+          {/* Stem from parent down to the horizontal connector */}
+          <div className="h-4 w-px bg-gray-300 mx-auto" aria-hidden />
+          {/* Horizontal connector between first and last child centers (skipped for n=1) */}
+          {n > 1 && (
+            <div
+              className="h-px bg-gray-300"
+              style={{ marginLeft: sideInset, marginRight: sideInset }}
+              aria-hidden
+            />
+          )}
+          {/* Children row */}
+          <div className="flex items-stretch">
+            {nonprofits.map((np) => (
+              <div key={np.name} className="flex-1 flex flex-col items-center px-1.5">
+                <div className="h-4 w-px bg-gray-300" aria-hidden />
+                <a
+                  href={`#${nonprofitAnchorId(np.name)}`}
+                  className="block w-full max-w-[200px] bg-white border border-gray-200 hover:border-brand-300 hover:bg-brand-50/60 rounded-lg px-3 py-2 text-center transition-colors"
+                >
+                  <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">
+                    {CONNECTION_LABEL[np.connectionType]}
+                  </p>
+                  <p className="text-xs font-medium text-gray-900 leading-snug line-clamp-2">
+                    {np.name}
+                  </p>
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function NonprofitCard({ np }: { np: Nonprofit }) {
   return (
-    <article className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex flex-col">
+    <article
+      id={nonprofitAnchorId(np.name)}
+      className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex flex-col scroll-mt-8 target:ring-2 target:ring-brand-400 target:ring-offset-2"
+    >
       <div className="flex items-start justify-between gap-3 mb-2">
         <h3 className="font-display text-lg text-gray-900 leading-tight">{np.name}</h3>
         <span className="shrink-0 bg-brand-50 text-brand-700 text-[10px] font-medium px-2 py-0.5 rounded-full border border-brand-100 uppercase tracking-wider">
