@@ -3,6 +3,19 @@
 import { useState } from "react";
 import { GrantOpportunity } from "@/lib/grants-gov";
 
+interface GuruGrant {
+  guid: string;
+  title: string;
+  description: string;
+  region: string;
+  minFunding: number | null;
+  maxFunding: number | null;
+  totalFunding: number | null;
+  status: string;
+  closeDate: string;
+  rerankScore: number | null;
+}
+
 interface OrgHierarchyNode {
   name: string;
   role: string;
@@ -158,6 +171,9 @@ export default function Home() {
   const [result, setResult] = useState<RadarResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedOrg, setSelectedOrg] = useState<string | null>(null);
+  const [guruResults, setGuruResults] = useState<Record<string, GuruGrant[]>>({});
+  const [guruLoading, setGuruLoading] = useState<Record<string, boolean>>({});
+  const [guruErrors, setGuruErrors] = useState<Record<string, string>>({});
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -166,6 +182,9 @@ export default function Home() {
     setResult(null);
     setError(null);
     setSelectedOrg(null);
+    setGuruResults({});
+    setGuruLoading({});
+    setGuruErrors({});
 
     try {
       const res = await fetch("/api/radar", {
@@ -183,6 +202,33 @@ export default function Home() {
       setError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchGuruGrants(entity: EntityResult) {
+    const key = entity.name;
+    if (guruLoading[key] || guruResults[key]) return;
+    setGuruLoading((prev) => ({ ...prev, [key]: true }));
+    setGuruErrors((prev) => { const n = { ...prev }; delete n[key]; return n; });
+    try {
+      const res = await fetch("/api/guru", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: entity.name,
+          mission: entity.profile.mission,
+          location: entity.profile.location,
+          programAreas: entity.profile.programAreas,
+          limit: 10,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) setGuruErrors((prev) => ({ ...prev, [key]: data.error }));
+      else setGuruResults((prev) => ({ ...prev, [key]: data.grants ?? [] }));
+    } catch {
+      setGuruErrors((prev) => ({ ...prev, [key]: "Search failed. Please try again." }));
+    } finally {
+      setGuruLoading((prev) => ({ ...prev, [key]: false }));
     }
   }
 
@@ -439,6 +485,124 @@ export default function Home() {
                         No active federal grants matched at this time.
                       </p>
                     )}
+
+                  {/* GrantGuru search — non-parent orgs only */}
+                  {!isParent && (
+                    <div className="mt-8 pt-6 border-t border-gray-100">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <p className="text-xs uppercase tracking-widest text-gray-500 font-medium">
+                            GrantGuru Search
+                          </p>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            AI-matched grants from the GrantGuru database
+                          </p>
+                        </div>
+                        {!guruResults[entity.name] && !guruLoading[entity.name] && (
+                          <button
+                            onClick={() => fetchGuruGrants(entity)}
+                            className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+                          >
+                            Search GrantGuru
+                          </button>
+                        )}
+                      </div>
+
+                      {guruLoading[entity.name] && (
+                        <div className="flex items-center gap-3 py-6 text-gray-500 text-sm">
+                          <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                          Searching GrantGuru…
+                        </div>
+                      )}
+
+                      {guruErrors[entity.name] && (
+                        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-red-700 text-sm">
+                          {guruErrors[entity.name]}
+                        </div>
+                      )}
+
+                      {guruResults[entity.name] && (
+                        <>
+                          {guruResults[entity.name].length === 0 ? (
+                            <p className="text-gray-500 text-sm py-2">
+                              No matching grants found in GrantGuru.
+                            </p>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="text-left text-gray-500 text-xs uppercase tracking-widest border-b border-gray-200">
+                                    <th className="pb-3 pr-4 font-medium">Title</th>
+                                    <th className="pb-3 pr-4 font-medium">Description</th>
+                                    <th className="pb-3 pr-4 font-medium">Region</th>
+                                    <th className="pb-3 pr-4 font-medium text-right">Min</th>
+                                    <th className="pb-3 pr-4 font-medium text-right">Max</th>
+                                    <th className="pb-3 pr-4 font-medium text-right">Total Pool</th>
+                                    <th className="pb-3 pr-4 font-medium">Status</th>
+                                    <th className="pb-3 font-medium">Closes</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {guruResults[entity.name].map((grant, k) => (
+                                    <tr
+                                      key={k}
+                                      className="border-b border-gray-100 hover:bg-gray-50 transition-colors align-top"
+                                    >
+                                      <td className="py-3 pr-4 text-gray-900 max-w-[180px]">
+                                        <p className="font-medium leading-snug">{grant.title}</p>
+                                        {grant.rerankScore !== null && (
+                                          <span className="inline-block mt-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 border border-brand-100">
+                                            {Math.round(grant.rerankScore * 100)}% match
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="py-3 pr-4 text-gray-600 text-xs leading-snug max-w-xs">
+                                        {grant.description
+                                          ? grant.description.slice(0, 160) + (grant.description.length > 160 ? "…" : "")
+                                          : "—"}
+                                      </td>
+                                      <td className="py-3 pr-4 text-gray-600 text-xs whitespace-nowrap">
+                                        {grant.region || "—"}
+                                      </td>
+                                      <td className="py-3 pr-4 text-right text-gray-700 text-xs whitespace-nowrap">
+                                        {grant.minFunding !== null ? formatCurrency(grant.minFunding) : "—"}
+                                      </td>
+                                      <td className="py-3 pr-4 text-right text-brand-700 font-medium text-xs whitespace-nowrap">
+                                        {grant.maxFunding !== null ? formatCurrency(grant.maxFunding) : "—"}
+                                      </td>
+                                      <td className="py-3 pr-4 text-right text-gray-700 text-xs whitespace-nowrap">
+                                        {grant.totalFunding !== null ? formatCurrency(grant.totalFunding) : "—"}
+                                      </td>
+                                      <td className="py-3 pr-4">
+                                        {grant.status ? (
+                                          <span
+                                            className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                                              /open|active|posted/i.test(grant.status)
+                                                ? "bg-green-50 text-green-700 border border-green-200"
+                                                : /closed|expired/i.test(grant.status)
+                                                ? "bg-red-50 text-red-700 border border-red-200"
+                                                : "bg-gray-100 text-gray-600 border border-gray-200"
+                                            }`}
+                                          >
+                                            {grant.status}
+                                          </span>
+                                        ) : (
+                                          "—"
+                                        )}
+                                      </td>
+                                      <td className="py-3 text-gray-600 text-xs whitespace-nowrap">
+                                        {grant.closeDate || "—"}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
                   </div>
                   );
                 })}
