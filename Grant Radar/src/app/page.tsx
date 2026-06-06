@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { GrantOpportunity } from "@/lib/grants-gov";
+import { useState, useRef } from "react";
 
 interface GuruGrant {
   guid: string;
@@ -23,11 +22,6 @@ interface OrgHierarchyNode {
   parentName?: string;
 }
 
-interface VettedGrant extends GrantOpportunity {
-  relevanceReason: string;
-  matchScore: number;
-}
-
 interface EntityResult {
   name: string;
   profile: {
@@ -37,7 +31,6 @@ interface EntityResult {
     programAreas: string[];
     ein?: string;
   };
-  grants: VettedGrant[];
 }
 
 interface RadarResponse {
@@ -61,8 +54,6 @@ function OrgTree({
   onSelect: (name: string) => void;
   selectedName: string | null;
 }) {
-  const grantCounts = new Map(entities.map((e) => [e.name, e.grants.length]));
-
   // Build child map from flat list.
   const childMap = new Map<string | undefined, OrgHierarchyNode[]>();
   for (const node of nodes) {
@@ -74,6 +65,9 @@ function OrgTree({
   // Root = nodes with no parentName.
   const roots = childMap.get(undefined) ?? [];
 
+  // Set of entity names that have cards
+  const entityNames = new Set(entities.map((e) => e.name));
+
   function TreeNode({
     node,
     depth,
@@ -82,18 +76,17 @@ function OrgTree({
     depth: number;
   }) {
     const children = childMap.get(node.name) ?? [];
-    const grantCount = grantCounts.get(node.name) ?? 0;
     const isSelected = selectedName === node.name;
-    const hasGrants = grantCount > 0;
+    const hasCard = entityNames.has(node.name);
 
     return (
       <div>
         <button
-          onClick={() => hasGrants && onSelect(node.name)}
+          onClick={() => hasCard && onSelect(node.name)}
           className={`w-full text-left group flex items-start gap-3 px-3 py-2.5 rounded-lg transition-colors ${
             isSelected
               ? "bg-brand-50 border border-brand-200"
-              : hasGrants
+              : hasCard
               ? "hover:bg-gray-50 cursor-pointer"
               : "cursor-default"
           }`}
@@ -105,7 +98,7 @@ function OrgTree({
               className={`w-2 h-2 rounded-full border-2 ${
                 isSelected
                   ? "border-brand-600 bg-brand-600"
-                  : hasGrants
+                  : hasCard
                   ? "border-brand-400 bg-brand-50"
                   : "border-gray-300 bg-white"
               }`}
@@ -125,11 +118,6 @@ function OrgTree({
                 {node.name}
               </span>
               <span className="text-xs text-gray-400 capitalize">{node.role}</span>
-              {hasGrants && (
-                <span className="grant-count-badge text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-100">
-                  {grantCount} grant{grantCount !== 1 ? "s" : ""}
-                </span>
-              )}
             </div>
             {node.description && (
               <p className="text-xs text-gray-500 mt-0.5 leading-snug">{node.description}</p>
@@ -185,6 +173,7 @@ export default function Home() {
     setGuruResults({});
     setGuruLoading({});
     setGuruErrors({});
+    fetchedRef.current = new Set();
 
     try {
       const res = await fetch("/api/radar", {
@@ -195,9 +184,11 @@ export default function Home() {
       if (!res.ok) throw new Error("Request failed");
       const data: RadarResponse = await res.json();
       setResult(data);
-      // Auto-select the first entity with grants.
-      const first = data.entities.find((e) => e.grants.length > 0);
+      // Auto-select the first non-parent entity and kick off GrantGuru fetches.
+      const rootName = data.orgHierarchy?.find((n) => !n.parentName)?.name ?? null;
+      const first = data.entities.find((e) => e.name !== rootName);
       if (first) setSelectedOrg(first.name);
+      autoFetchGuru(data.entities, rootName);
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -205,32 +196,52 @@ export default function Home() {
     }
   }
 
-  async function fetchGuruGrants(entity: EntityResult) {
+  // Track which orgs we've already kicked off a fetch for.
+  const fetchedRef = useRef(new Set<string>());
+
+  function fetchGuruGrants(entity: EntityResult) {
     const key = entity.name;
-    if (guruLoading[key] || guruResults[key]) return;
+    if (fetchedRef.current.has(key)) return;
+    fetchedRef.current.add(key);
     setGuruLoading((prev) => ({ ...prev, [key]: true }));
-    setGuruErrors((prev) => { const n = { ...prev }; delete n[key]; return n; });
-    try {
-      const res = await fetch("/api/guru", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: entity.name,
-          mission: entity.profile.mission,
-          location: entity.profile.location,
-          programAreas: entity.profile.programAreas,
-          limit: 10,
-        }),
+    fetch("/api/guru", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: entity.name,
+        mission: entity.profile.mission,
+        location: entity.profile.location,
+        programAreas: entity.profile.programAreas,
+        limit: 10,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.error) setGuruErrors((prev) => ({ ...prev, [key]: data.error }));
+        else setGuruResults((prev) => ({ ...prev, [key]: data.grants ?? [] }));
+      })
+      .catch(() => {
+        setGuruErrors((prev) => ({ ...prev, [key]: "Search failed. Please try again." }));
+      })
+      .finally(() => {
+        setGuruLoading((prev) => ({ ...prev, [key]: false }));
       });
-      const data = await res.json();
-      if (data.error) setGuruErrors((prev) => ({ ...prev, [key]: data.error }));
-      else setGuruResults((prev) => ({ ...prev, [key]: data.grants ?? [] }));
-    } catch {
-      setGuruErrors((prev) => ({ ...prev, [key]: "Search failed. Please try again." }));
-    } finally {
-      setGuruLoading((prev) => ({ ...prev, [key]: false }));
+  }
+
+  // Kick off GrantGuru fetches for a set of entities (non-parent only).
+  function autoFetchGuru(entities: EntityResult[], rootName: string | null) {
+    for (const entity of entities) {
+      if (entity.name !== rootName) fetchGuruGrants(entity);
     }
   }
+
+  const parentOrgName = result?.orgHierarchy?.find((n) => !n.parentName)?.name ?? null;
+
+  const visibleEntities = result
+    ? selectedOrg
+      ? result.entities.filter((e) => e.name === selectedOrg)
+      : result.entities
+    : [];
 
   function formatCurrency(amount: number) {
     if (!amount) return "—";
@@ -240,16 +251,6 @@ export default function Home() {
       maximumFractionDigits: 0,
     }).format(amount);
   }
-
-  // Entities to show: if one is selected, show only that; otherwise show all.
-  const visibleEntities = result
-    ? selectedOrg
-      ? result.entities.filter((e) => e.name === selectedOrg)
-      : result.entities
-    : [];
-
-  // The root org is the hierarchy node with no parentName (the searched entity).
-  const parentOrgName = result?.orgHierarchy?.find((n) => !n.parentName)?.name ?? null;
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
@@ -315,14 +316,6 @@ export default function Home() {
                   {result.type}
                 </span>
               </div>
-              <div className="text-right">
-                <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">
-                  Total Accessible Pool
-                </p>
-                <p className="font-display text-3xl text-brand-600">
-                  {formatCurrency(result.totalPool)}
-                </p>
-              </div>
             </div>
 
             {/* Summary text */}
@@ -340,9 +333,11 @@ export default function Home() {
                   <OrgTree
                     nodes={result.orgHierarchy}
                     entities={result.entities}
-                    onSelect={(name) =>
-                      setSelectedOrg((prev) => (prev === name ? null : name))
-                    }
+                    onSelect={(name) => {
+                      setSelectedOrg((prev) => (prev === name ? null : name));
+                      const entity = result.entities.find((e) => e.name === name);
+                      if (entity && name !== parentOrgName) fetchGuruGrants(entity);
+                    }}
                     selectedName={selectedOrg}
                   />
                   {selectedOrg && (
@@ -367,243 +362,165 @@ export default function Home() {
                 {visibleEntities.map((entity, i) => {
                   const isParent = entity.name === parentOrgName;
                   return (
-                  <div
-                    key={i}
-                    className={`rounded-xl p-6 shadow-sm border ${
-                      isParent
-                        ? "bg-brand-50 border-brand-100"
-                        : "bg-white border-gray-200"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 mb-1 flex-wrap">
-                      <h2 className="font-display text-2xl text-gray-900">{entity.name}</h2>
-                      {isParent && (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-brand-600 text-white shrink-0">
-                          <svg className="w-3 h-3" viewBox="0 0 12 12" fill="currentColor">
-                            <circle cx="6" cy="3" r="2" />
-                            <circle cx="2.5" cy="9" r="1.5" />
-                            <circle cx="9.5" cy="9" r="1.5" />
-                            <line x1="6" y1="5" x2="2.5" y2="7.5" stroke="currentColor" strokeWidth="1" />
-                            <line x1="6" y1="5" x2="9.5" y2="7.5" stroke="currentColor" strokeWidth="1" />
-                          </svg>
-                          Parent Organization
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-gray-600 text-sm mb-5">{entity.profile.mission}</p>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                      <div>
-                        <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">
-                          Location
-                        </p>
-                        <p className="text-sm text-gray-700">{entity.profile.location}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">
-                          Est. Budget
-                        </p>
-                        <p className="text-sm text-gray-700">{entity.profile.estimatedBudget}</p>
-                      </div>
-                      {entity.profile.ein && (
-                        <div>
-                          <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">
-                            EIN
-                          </p>
-                          <p className="text-sm text-gray-700">{entity.profile.ein}</p>
-                        </div>
-                      )}
-                      <div>
-                        <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">
-                          Program Areas
-                        </p>
-                        <p className="text-sm text-gray-700">
-                          {entity.profile.programAreas.slice(0, 3).join(", ")}
-                        </p>
-                      </div>
-                    </div>
-
-                    {entity.grants.length > 0 ? (
-                      <div>
-                        <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">
-                          {entity.grants.length} Matched Grant
-                          {entity.grants.length !== 1 ? "s" : ""}
-                        </p>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="text-left text-gray-500 text-xs uppercase tracking-widest border-b border-gray-200">
-                                <th className="pb-3 pr-4 font-medium">Title</th>
-                                <th className="pb-3 pr-4 font-medium">Why it matches</th>
-                                <th className="pb-3 pr-4 font-medium">Agency</th>
-                                <th className="pb-3 pr-4 font-medium text-right">Award Ceiling</th>
-                                <th className="pb-3 font-medium">Close Date</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {entity.grants.map((grant, j) => (
-                                <tr
-                                  key={j}
-                                  className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
-                                >
-                                  <td className="py-3 pr-4 text-gray-900 max-w-xs">
-                                    <div className="flex items-start gap-2">
-                                      <span
-                                        className="mt-0.5 shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 border border-brand-100"
-                                        title="Match score (1–5)"
-                                      >
-                                        {grant.matchScore}/5
-                                      </span>
-                                      <div>
-                                        <p className="font-medium leading-snug">
-                                          {grant.opportunityTitle}
-                                        </p>
-                                        {grant.opportunityNumber && (
-                                          <p className="text-gray-500 text-xs mt-0.5">
-                                            {grant.opportunityNumber}
-                                          </p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </td>
-                                  <td className="py-3 pr-4 text-gray-600 max-w-sm text-xs leading-snug">
-                                    {grant.relevanceReason}
-                                  </td>
-                                  <td className="py-3 pr-4 text-gray-600">{grant.agencyName}</td>
-                                  <td className="py-3 pr-4 text-right text-brand-700 font-medium">
-                                    {formatCurrency(grant.awardCeiling)}
-                                  </td>
-                                  <td className="py-3 text-gray-600">{grant.closeDate}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-gray-500 text-sm">
-                        No active federal grants matched at this time.
-                      </p>
-                    )}
-
-                  {/* GrantGuru search — non-parent orgs only */}
-                  {!isParent && (
-                    <div className="mt-8 pt-6 border-t border-gray-100">
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <p className="text-xs uppercase tracking-widest text-gray-500 font-medium">
-                            GrantGuru Search
-                          </p>
-                          <p className="text-xs text-gray-400 mt-0.5">
-                            AI-matched grants from the GrantGuru database
-                          </p>
-                        </div>
-                        {!guruResults[entity.name] && !guruLoading[entity.name] && (
-                          <button
-                            onClick={() => fetchGuruGrants(entity)}
-                            className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
-                          >
-                            Search GrantGuru
-                          </button>
+                    <div
+                      key={i}
+                      className={`rounded-xl p-6 shadow-sm border ${
+                        isParent
+                          ? "bg-brand-50 border-brand-100"
+                          : "bg-white border-gray-200"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 mb-1 flex-wrap">
+                        <h2 className="font-display text-2xl text-gray-900">{entity.name}</h2>
+                        {isParent && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-brand-600 text-white shrink-0">
+                            <svg className="w-3 h-3" viewBox="0 0 12 12" fill="currentColor">
+                              <circle cx="6" cy="3" r="2" />
+                              <circle cx="2.5" cy="9" r="1.5" />
+                              <circle cx="9.5" cy="9" r="1.5" />
+                              <line x1="6" y1="5" x2="2.5" y2="7.5" stroke="currentColor" strokeWidth="1" />
+                              <line x1="6" y1="5" x2="9.5" y2="7.5" stroke="currentColor" strokeWidth="1" />
+                            </svg>
+                            Parent Organization
+                          </span>
                         )}
                       </div>
+                      <p className="text-gray-600 text-sm mb-5">{entity.profile.mission}</p>
 
-                      {guruLoading[entity.name] && (
-                        <div className="flex items-center gap-3 py-6 text-gray-500 text-sm">
-                          <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin shrink-0" />
-                          Searching GrantGuru…
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div>
+                          <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">
+                            Location
+                          </p>
+                          <p className="text-sm text-gray-700">{entity.profile.location}</p>
                         </div>
-                      )}
-
-                      {guruErrors[entity.name] && (
-                        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-red-700 text-sm">
-                          {guruErrors[entity.name]}
+                        <div>
+                          <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">
+                            Est. Budget
+                          </p>
+                          <p className="text-sm text-gray-700">{entity.profile.estimatedBudget}</p>
                         </div>
-                      )}
-
-                      {guruResults[entity.name] && (
-                        <>
-                          {guruResults[entity.name].length === 0 ? (
-                            <p className="text-gray-500 text-sm py-2">
-                              No matching grants found in GrantGuru.
+                        {entity.profile.ein && (
+                          <div>
+                            <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">
+                              EIN
                             </p>
-                          ) : (
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-sm">
-                                <thead>
-                                  <tr className="text-left text-gray-500 text-xs uppercase tracking-widest border-b border-gray-200">
-                                    <th className="pb-3 pr-4 font-medium">Title</th>
-                                    <th className="pb-3 pr-4 font-medium">Description</th>
-                                    <th className="pb-3 pr-4 font-medium">Region</th>
-                                    <th className="pb-3 pr-4 font-medium text-right">Min</th>
-                                    <th className="pb-3 pr-4 font-medium text-right">Max</th>
-                                    <th className="pb-3 pr-4 font-medium text-right">Total Pool</th>
-                                    <th className="pb-3 pr-4 font-medium">Status</th>
-                                    <th className="pb-3 font-medium">Closes</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {guruResults[entity.name].map((grant, k) => (
-                                    <tr
-                                      key={k}
-                                      className="border-b border-gray-100 hover:bg-gray-50 transition-colors align-top"
-                                    >
-                                      <td className="py-3 pr-4 text-gray-900 max-w-[180px]">
-                                        <p className="font-medium leading-snug">{grant.title}</p>
-                                        {grant.rerankScore !== null && (
-                                          <span className="inline-block mt-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 border border-brand-100">
-                                            {Math.round(grant.rerankScore * 100)}% match
-                                          </span>
-                                        )}
-                                      </td>
-                                      <td className="py-3 pr-4 text-gray-600 text-xs leading-snug max-w-xs">
-                                        {grant.description
-                                          ? grant.description.slice(0, 160) + (grant.description.length > 160 ? "…" : "")
-                                          : "—"}
-                                      </td>
-                                      <td className="py-3 pr-4 text-gray-600 text-xs whitespace-nowrap">
-                                        {grant.region || "—"}
-                                      </td>
-                                      <td className="py-3 pr-4 text-right text-gray-700 text-xs whitespace-nowrap">
-                                        {grant.minFunding !== null ? formatCurrency(grant.minFunding) : "—"}
-                                      </td>
-                                      <td className="py-3 pr-4 text-right text-brand-700 font-medium text-xs whitespace-nowrap">
-                                        {grant.maxFunding !== null ? formatCurrency(grant.maxFunding) : "—"}
-                                      </td>
-                                      <td className="py-3 pr-4 text-right text-gray-700 text-xs whitespace-nowrap">
-                                        {grant.totalFunding !== null ? formatCurrency(grant.totalFunding) : "—"}
-                                      </td>
-                                      <td className="py-3 pr-4">
-                                        {grant.status ? (
-                                          <span
-                                            className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
-                                              /open|active|posted/i.test(grant.status)
-                                                ? "bg-green-50 text-green-700 border border-green-200"
-                                                : /closed|expired/i.test(grant.status)
-                                                ? "bg-red-50 text-red-700 border border-red-200"
-                                                : "bg-gray-100 text-gray-600 border border-gray-200"
-                                            }`}
-                                          >
-                                            {grant.status}
-                                          </span>
-                                        ) : (
-                                          "—"
-                                        )}
-                                      </td>
-                                      <td className="py-3 text-gray-600 text-xs whitespace-nowrap">
-                                        {grant.closeDate || "—"}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                            <p className="text-sm text-gray-700">{entity.profile.ein}</p>
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">
+                            Program Areas
+                          </p>
+                          <p className="text-sm text-gray-700">
+                            {entity.profile.programAreas.slice(0, 3).join(", ")}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* GrantGuru results — non-parent orgs only, auto-loaded */}
+                      {!isParent && (
+                        <div>
+                          <p className="text-xs uppercase tracking-widest text-gray-500 font-medium mb-3">
+                            Grant Opportunities
+                          </p>
+
+                          {guruLoading[entity.name] && (
+                            <div className="flex items-center gap-3 py-6 text-gray-500 text-sm">
+                              <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                              Searching for grants…
                             </div>
                           )}
-                        </>
+
+                          {guruErrors[entity.name] && (
+                            <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-red-700 text-sm">
+                              {guruErrors[entity.name]}
+                            </div>
+                          )}
+
+                          {guruResults[entity.name] && (
+                            <>
+                              {guruResults[entity.name].length === 0 ? (
+                                <p className="text-gray-500 text-sm py-2">
+                                  No matching grants found.
+                                </p>
+                              ) : (
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-sm">
+                                    <thead>
+                                      <tr className="text-left text-gray-500 text-xs uppercase tracking-widest border-b border-gray-200">
+                                        <th className="pb-3 pr-4 font-medium">Title</th>
+                                        <th className="pb-3 pr-4 font-medium">Description</th>
+                                        <th className="pb-3 pr-4 font-medium">Region</th>
+                                        <th className="pb-3 pr-4 font-medium text-right">Min Funding</th>
+                                        <th className="pb-3 pr-4 font-medium text-right">Max Funding</th>
+                                        <th className="pb-3 pr-4 font-medium text-right">Total Pool</th>
+                                        <th className="pb-3 pr-4 font-medium">Status</th>
+                                        <th className="pb-3 font-medium">Closes</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {guruResults[entity.name].map((grant, k) => (
+                                        <tr
+                                          key={k}
+                                          className="border-b border-gray-100 hover:bg-gray-50 transition-colors align-top"
+                                        >
+                                          <td className="py-3 pr-4 text-gray-900 max-w-[180px]">
+                                            <p className="font-medium leading-snug">{grant.title}</p>
+                                            {grant.rerankScore !== null && (
+                                              <span className="inline-block mt-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 border border-brand-100">
+                                                {Math.round(grant.rerankScore * 100)}% match
+                                              </span>
+                                            )}
+                                          </td>
+                                          <td className="py-3 pr-4 text-gray-600 text-xs leading-snug max-w-xs">
+                                            {grant.description
+                                              ? grant.description.slice(0, 160) + (grant.description.length > 160 ? "…" : "")
+                                              : "—"}
+                                          </td>
+                                          <td className="py-3 pr-4 text-gray-600 text-xs whitespace-nowrap">
+                                            {grant.region || "—"}
+                                          </td>
+                                          <td className="py-3 pr-4 text-right text-gray-700 text-xs whitespace-nowrap">
+                                            {grant.minFunding !== null ? formatCurrency(grant.minFunding) : "—"}
+                                          </td>
+                                          <td className="py-3 pr-4 text-right text-brand-700 font-medium text-xs whitespace-nowrap">
+                                            {grant.maxFunding !== null ? formatCurrency(grant.maxFunding) : "—"}
+                                          </td>
+                                          <td className="py-3 pr-4 text-right text-gray-700 text-xs whitespace-nowrap">
+                                            {grant.totalFunding !== null ? formatCurrency(grant.totalFunding) : "—"}
+                                          </td>
+                                          <td className="py-3 pr-4">
+                                            {grant.status ? (
+                                              <span
+                                                className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                                                  /open|active|posted/i.test(grant.status)
+                                                    ? "bg-green-50 text-green-700 border border-green-200"
+                                                    : /closed|expired/i.test(grant.status)
+                                                    ? "bg-red-50 text-red-700 border border-red-200"
+                                                    : "bg-gray-100 text-gray-600 border border-gray-200"
+                                                }`}
+                                              >
+                                                {grant.status}
+                                              </span>
+                                            ) : (
+                                              "—"
+                                            )}
+                                          </td>
+                                          <td className="py-3 text-gray-600 text-xs whitespace-nowrap">
+                                            {grant.closeDate || "—"}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                  </div>
                   );
                 })}
               </div>

@@ -15,8 +15,8 @@
 import crypto from "node:crypto";
 import { generateText } from "ai";
 
-const BASE_URL = (process.env.GRANTGURU_API_URL ?? "https://grantguru.com/api/v1").replace(/\/$/, "");
-const API_KEY = process.env.GRANTGURU_API_KEY ?? "";
+const BASE_URL = (process.env.GRANTGURU_API_URL ?? "https://grantguru.com/api/v1").replace(/\/$/, "").replace(/^['"]|['"]$/g, "");
+const API_KEY = (process.env.GRANTGURU_API_KEY ?? "").replace(/^['"]|['"]$/g, "");
 const DEMO_EMAIL = "grant-radar-search@greatgrants.ai";
 const MODEL = "anthropic/claude-haiku-4.5";
 
@@ -93,13 +93,24 @@ function findGuid(value: unknown): string | null {
 }
 
 async function getPartnerToken(): Promise<string> {
-  const res = await fetch(`${BASE_URL}/auth/token`, {
+  const url = `${BASE_URL}/auth/token`;
+  const keyPreview = API_KEY.length > 12
+    ? `${API_KEY.slice(0, 8)}...${API_KEY.slice(-4)} (${API_KEY.length} chars)`
+    : `(${API_KEY.length} chars)`;
+  console.log(`[GrantGuru] POST ${url}`);
+  console.log(`[GrantGuru] API key: ${keyPreview}`);
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ apiKey: API_KEY, algorithm: "aes-256-gcm" }),
   });
+  console.log(`[GrantGuru] /auth/token response: ${res.status} ${res.statusText}`);
   const body = await res.json();
-  if (!body.status) throw new Error(`Partner token failed: ${body.error}`);
+  if (!body.status) {
+    console.error(`[GrantGuru] Auth failed. Full response:`, JSON.stringify(body, null, 2));
+    throw new Error(`Partner token failed: ${body.error || body.message || JSON.stringify(body)}`);
+  }
+  console.log(`[GrantGuru] Auth success — got partner token`);
   return body.data.accessToken;
 }
 
