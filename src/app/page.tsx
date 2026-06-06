@@ -133,12 +133,12 @@ export default function Home() {
     <main className="min-h-screen bg-white text-gray-900">
       <div className="max-w-6xl mx-auto px-6 py-16">
         <header className="mb-12">
-          <GreatGrantsLogo className="text-brand-700 h-9 mb-6" />
+          <GreatGrantsLogo tagline="Radar" className="text-brand-700 h-9 mb-6" />
           <h1 className="font-display text-5xl text-gray-900 tracking-tight mb-3">Grant Radar</h1>
           <p className="text-gray-600 text-lg max-w-2xl">
             Enter a parent company. We&apos;ll surface the nonprofits they founded or are structurally
-            tied to — their corporate and family foundations — and show the top federal grants each
-            one is currently eligible for.
+            tied to, including their corporate and family foundations, and show the top federal
+            grants each one is currently eligible for.
           </p>
         </header>
 
@@ -239,7 +239,7 @@ export default function Home() {
             ) : (
               <>
                 <p className="text-xs text-gray-500 italic leading-relaxed -mt-4">
-                  Radar uses AI to scan public information about each nonprofit — match scores
+                  Radar uses AI to scan public information about each nonprofit, so match scores
                   reflect that thin signal. With a full organization profile inside Great Grants,
                   match quality improves substantially.
                 </p>
@@ -251,6 +251,7 @@ export default function Home() {
                 </div>
 
                 <section className="bg-gradient-to-br from-brand-50 to-white border border-brand-100 rounded-2xl p-8 text-center">
+                  <GreatGrantsLogo className="text-brand-700 h-10 mx-auto mb-5" />
                   <p className="text-xs uppercase tracking-widest text-brand-700 mb-2 font-medium">
                     These are public-research matches
                   </p>
@@ -258,10 +259,10 @@ export default function Home() {
                     Great Grants finds the matches Radar can&apos;t
                   </h3>
                   <p className="text-gray-600 max-w-xl mx-auto mb-6 leading-relaxed">
-                    Radar runs on public web data — a thin signal. When a nonprofit connects their
-                    full organization profile, real program narratives, target populations, and
-                    geography, Great Grants surfaces dramatically higher-confidence matches and
-                    grants Radar can&apos;t see.
+                    Radar runs on public web data, which is a thin signal. When a nonprofit
+                    connects their full organization profile with real program narratives, target
+                    populations, and geography, Great Grants surfaces dramatically higher-confidence
+                    matches and grants Radar can&apos;t see.
                   </p>
                   <a
                     href="https://greatgrants.ai"
@@ -269,7 +270,7 @@ export default function Home() {
                     rel="noreferrer"
                     className="inline-block bg-brand-600 hover:bg-brand-700 text-white font-medium px-6 py-3 rounded-lg transition-colors"
                   >
-                    See it in Great Grants →
+                    Check out Great Grants →
                   </a>
                 </section>
               </>
