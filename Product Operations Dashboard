@@ -1,5 +1,0 @@
-cp "/Users/arlenevelazquez/Documents/Claude/Projects/GreatGrants.ai/index.html" <repo-path>/
-cd <repo-path>
-git add index.html
-git commit -m "Add product operations dashboard"
-git push
