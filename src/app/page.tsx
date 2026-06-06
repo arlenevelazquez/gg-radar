@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { GreatGrantsLogo } from "@/components/foundations/logo/great-grants-logo";
 
 interface ParentProfile {
   name: string;
@@ -132,14 +133,7 @@ export default function Home() {
     <main className="min-h-screen bg-white text-gray-900">
       <div className="max-w-6xl mx-auto px-6 py-16">
         <header className="mb-12">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center text-white font-display text-lg">
-              G
-            </div>
-            <span className="text-xs text-gray-500 font-medium tracking-widest uppercase">
-              GreatGrants.ai
-            </span>
-          </div>
+          <GreatGrantsLogo tagline="Radar" className="text-brand-700 h-9 mb-6" />
           <h1 className="font-display text-5xl text-gray-900 tracking-tight mb-3">Grant Radar</h1>
           <p className="text-gray-600 text-lg max-w-2xl">
             Enter a parent company. We&apos;ll surface the nonprofits they founded or are structurally
