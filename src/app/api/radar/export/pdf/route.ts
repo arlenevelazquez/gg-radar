@@ -22,9 +22,10 @@ export async function POST(req: NextRequest) {
   }
 
   const brief = deriveBrief(response);
+  const origin = req.nextUrl.origin;
 
   try {
-    const pdf = await renderPdf(brief);
+    const pdf = await renderPdf(brief, origin);
     const filename = defaultFilename(brief, "pdf");
     return new NextResponse(new Uint8Array(pdf), {
       status: 200,

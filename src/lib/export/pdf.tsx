@@ -1,52 +1,28 @@
-import { renderToStaticMarkup } from "react-dom/server";
 import type { Browser } from "playwright-core";
-import { RadarDeckHTML } from "@/app/_deck/RadarDeckHTML";
 import type { RadarBrief } from "./brief";
 
 /**
  * Renders a RadarBrief to a 16:9 widescreen PDF (13.333" × 7.5" per page).
  *
- * Strategy:
- *  1. renderToStaticMarkup(<RadarDeckHTML />) → inner HTML string
- *  2. wrap it in a complete <!DOCTYPE html> document with Google Fonts
- *  3. launch chromium (Sparticuz on Vercel, system playwright in dev)
- *  4. page.setContent(html, { waitUntil: "networkidle" }) so fonts load
- *  5. page.pdf({ width: 13.333in, height: 7.5in, printBackground: true })
+ * We avoid react-dom/server entirely — Next 16 + React 19's RSC runtime
+ * throws when it sees that import in the App Router dependency graph. So
+ * instead we let Next render the deck via its normal SSR pipeline:
+ *
+ *  1. base64-encode the brief and stuff it in an `x-radar-brief` HTTP header
+ *  2. launch chromium (Sparticuz on Vercel, system playwright in dev)
+ *  3. page.goto(`${origin}/internal/deck`) with extraHTTPHeaders set
+ *  4. that page reads the header, decodes the brief, renders the deck
+ *  5. page.pdf({ width: 13.333in, height: 7.5in })
+ *
+ * Brief size note: HTTP servers cap header values around 16 KB (Node default).
+ * A typical 3-nonprofit brief is well under that, but very large results
+ * (lots of nonprofits or grants) may need compression or a stash endpoint.
  */
 
-const FONTS_HREF =
-  "https://fonts.googleapis.com/css2?family=Cabin:wght@400;500;600;700&family=Lustria&display=swap";
+const HEADER_NAME = "x-radar-brief";
 
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => {
-    switch (c) {
-      case "&":
-        return "&amp;";
-      case "<":
-        return "&lt;";
-      case ">":
-        return "&gt;";
-      case '"':
-        return "&quot;";
-      default:
-        return "&#39;";
-    }
-  });
-}
-
-function wrapHtml(brief: RadarBrief, inner: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=1280" />
-  <title>${escapeHtml(brief.parent.name)} — Grant Radar</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-  <link href="${FONTS_HREF}" rel="stylesheet" />
-</head>
-<body>${inner}</body>
-</html>`;
+function encodeBrief(brief: RadarBrief): string {
+  return Buffer.from(JSON.stringify(brief), "utf8").toString("base64");
 }
 
 /** True when running inside a Vercel/Lambda-style serverless function. */
@@ -70,18 +46,19 @@ async function launchBrowser(): Promise<Browser> {
   return playwright.launch({ headless: true });
 }
 
-export async function renderPdf(brief: RadarBrief): Promise<Buffer> {
-  const inner = renderToStaticMarkup(<RadarDeckHTML brief={brief} />);
-  const html = wrapHtml(brief, inner);
+export async function renderPdf(brief: RadarBrief, origin: string): Promise<Buffer> {
+  const encoded = encodeBrief(brief);
+  const deckUrl = `${origin}/internal/deck`;
 
   const browser = await launchBrowser();
   try {
     const context = await browser.newContext({
       viewport: { width: 1280, height: 720 },
       deviceScaleFactor: 2,
+      extraHTTPHeaders: { [HEADER_NAME]: encoded },
     });
     const page = await context.newPage();
-    await page.setContent(html, { waitUntil: "networkidle" });
+    await page.goto(deckUrl, { waitUntil: "networkidle", timeout: 30000 });
     const pdf = await page.pdf({
       width: "13.333in",
       height: "7.5in",
