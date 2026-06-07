@@ -2,6 +2,7 @@
 
 import { useState, useSyncExternalStore } from "react";
 import { GreatGrantsLogo } from "@/components/foundations/logo/great-grants-logo";
+import { ExportButtons } from "@/app/_components/ExportButtons";
 
 interface ParentProfile {
   name: string;
@@ -38,11 +39,29 @@ interface Nonprofit {
   grants: {
     status: "ok" | "error";
     qualifiedCount: number;
+    qualifiedFundingTotal: number | null;
     rawCount: number;
     cappedAtLimit: boolean;
     top: TopGrant[];
     error?: string;
   };
+}
+
+function formatCurrencyShort(amount: number): string {
+  if (amount >= 1_000_000_000) {
+    return `$${(amount / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
+  }
+  if (amount >= 1_000_000) {
+    return `$${(amount / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  }
+  if (amount >= 1_000) {
+    return `$${Math.round(amount / 1_000)}K`;
+  }
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
 
 const QUALITY_BADGE: Record<MatchQuality, { label: string; className: string }> = {
@@ -203,15 +222,20 @@ export default function Home() {
                     )}
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs uppercase tracking-widest text-gray-500 mb-1">
-                    Connected nonprofits
-                  </p>
-                  <p className="font-display text-4xl text-brand-600">{result.nonprofits.length}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {totalQualified.toLocaleString("en-US")} qualified federal grant
-                    {totalQualified === 1 ? "" : "s"}
-                  </p>
+                <div className="flex items-start gap-6">
+                  <div className="text-right">
+                    <p className="text-xs uppercase tracking-widest text-gray-500 mb-1">
+                      Connected nonprofits
+                    </p>
+                    <p className="font-display text-4xl text-brand-600">
+                      {result.nonprofits.length}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {totalQualified.toLocaleString("en-US")} qualified federal grant
+                      {totalQualified === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <ExportButtons response={result} />
                 </div>
               </div>
               <p className="text-gray-700 leading-relaxed mb-4">{result.parent.description}</p>
@@ -373,6 +397,17 @@ function NonprofitCard({ np }: { np: Nonprofit }) {
           {CONNECTION_LABEL[np.connectionType]}
         </span>
       </div>
+      {np.grants.status === "ok" && np.grants.qualifiedFundingTotal !== null && (
+        <div className="mb-2 flex items-baseline gap-2">
+          <span className="font-display text-2xl text-brand-700 leading-none">
+            {formatCurrencyShort(np.grants.qualifiedFundingTotal)}
+          </span>
+          <span className="text-[11px] text-gray-500 leading-tight">
+            possible · {np.grants.qualifiedCount} qualified grant
+            {np.grants.qualifiedCount === 1 ? "" : "s"}
+          </span>
+        </div>
+      )}
       <p className="text-xs text-gray-500 mb-3">{locationText(np.location)}</p>
       <p className="text-sm text-gray-600 leading-relaxed mb-3 line-clamp-3">{np.mission}</p>
       <p className="text-xs text-gray-500 italic mb-4 border-l-2 border-gray-200 pl-2">
@@ -431,18 +466,7 @@ function NonprofitCard({ np }: { np: Nonprofit }) {
                         </span>
                       )}
                       <div className="min-w-0 flex-1">
-                        {g.url ? (
-                          <a
-                            href={g.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-medium text-gray-900 hover:text-brand-700 leading-snug block"
-                          >
-                            {g.programName}
-                          </a>
-                        ) : (
-                          <p className="font-medium text-gray-900 leading-snug">{g.programName}</p>
-                        )}
+                        <p className="font-medium text-gray-900 leading-snug">{g.programName}</p>
                         {g.agency && (
                           <p className="text-gray-500 text-[11px] mt-0.5 truncate">{g.agency}</p>
                         )}

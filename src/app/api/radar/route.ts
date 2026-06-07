@@ -32,10 +32,17 @@ export interface TopGrant {
   matchQuality: MatchQuality | null;
 }
 
-interface NonprofitGrantsBlock {
+export interface NonprofitGrantsBlock {
   status: "ok" | "error";
   /** Count of returned grants with matchScore >= QUALIFIED_THRESHOLD (50). */
   qualifiedCount: number;
+  /**
+   * Sum of fundingMax (or fundingWorth fallback) across all qualified grants
+   * in the full GG result set. Null when no qualified grant has numeric
+   * funding data. Reflects the same scope as qualifiedCount so the two stats
+   * stay consistent in the UI.
+   */
+  qualifiedFundingTotal: number | null;
   /** Total grants returned by GG (capped at SEARCH_LIMIT). */
   rawCount: number;
   /** True when rawCount === SEARCH_LIMIT, suggesting more results exist beyond the cap. */
@@ -44,7 +51,7 @@ interface NonprofitGrantsBlock {
   error?: string;
 }
 
-interface RadarResponse {
+export interface RadarResponse {
   parent: ParentProfile;
   summary: string;
   nonprofits: Array<ConnectedNonprofit & { grants: NonprofitGrantsBlock }>;
@@ -131,6 +138,21 @@ function countQualified(grants: GrantGuruGrant[]): number {
   ).length;
 }
 
+function sumQualifiedFunding(grants: GrantGuruGrant[]): number | null {
+  let sum = 0;
+  let any = false;
+  for (const g of grants) {
+    const score = typeof g.rerankScore === "number" ? Math.round(g.rerankScore * 100) : 0;
+    if (score < QUALIFIED_THRESHOLD) continue;
+    const amount = g.fundingMax ?? g.fundingWorth ?? null;
+    if (typeof amount === "number" && amount > 0) {
+      sum += amount;
+      any = true;
+    }
+  }
+  return any ? sum : null;
+}
+
 async function lookupGrantsFor(np: ConnectedNonprofit): Promise<NonprofitGrantsBlock> {
   try {
     const profile: NonprofitProfile = {
@@ -145,6 +167,7 @@ async function lookupGrantsFor(np: ConnectedNonprofit): Promise<NonprofitGrantsB
     return {
       status: "ok",
       qualifiedCount: countQualified(grants),
+      qualifiedFundingTotal: sumQualifiedFunding(grants),
       rawCount: grants.length,
       cappedAtLimit: grants.length >= SEARCH_LIMIT,
       top: pickTop(grants),
@@ -153,6 +176,7 @@ async function lookupGrantsFor(np: ConnectedNonprofit): Promise<NonprofitGrantsB
     return {
       status: "error",
       qualifiedCount: 0,
+      qualifiedFundingTotal: null,
       rawCount: 0,
       cappedAtLimit: false,
       top: [],

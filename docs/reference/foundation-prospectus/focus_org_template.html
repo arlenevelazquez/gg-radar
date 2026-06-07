@@ -1,0 +1,157 @@
+<!-- ============================================================
+     SLIDE 3 — Featured organization prospectus
+     VARIABLES:
+       FEATURED_GRANTEE             — organization name
+       SLIDE_3_EYEBROW              — e.g., "Focus: The Bowery Mission"
+       SLIDE_3_HEADLINE             — e.g., "A working prospectus"
+       SLIDE_3_LEDE                 — mission statement verbatim from org website
+       ORG_BUDGET                   — operating budget
+       ORG_FED_GRANTS_CURRENT       — current federal grants ($0, $X)
+       ORG_QUALIFYING_PROGRAMS      — count of qualifying programs
+       ORG_OPPORTUNITY_TOTAL        — combined accessible pool
+       PROSPECTUS_ROW_N_*           — table rows (8 programs)
+       OPP_TOTAL_VALUE              — dark band value
+       OPP_TOTAL_CAVEAT             — qualifier text
+     ============================================================ -->
+<section class="slide slide-3" id="slide-3">
+  <div class="slide-inner">
+
+    <div class="slide-header">
+      <span>{{FOUNDATION_NAME}}</span>
+      <span class="gg-mark">GreatGrants</span>
+    </div>
+
+    <div class="eyebrow">{{SLIDE_3_EYEBROW}}<!-- e.g., "Focus: The Bowery Mission" --></div>
+
+    <h1 class="headline">{{SLIDE_3_HEADLINE}}<!-- e.g., "A working prospectus" --></h1>
+
+    <hr class="hr">
+
+    <p class="lede">
+      {{SLIDE_3_LEDE}}<!-- Mission statement pulled verbatim from the org's website. Avoid framing or commentary on the landscape or the organization. -->
+    </p>
+
+    <!-- Organization-level summary stats -->
+    <div class="org-stats-row">
+      <div class="org-stat">
+        <span class="org-stat-label">Operating budget</span>
+        <span class="org-stat-value">{{ORG_BUDGET}}</span>
+        <span class="org-stat-note">{{ORG_BUDGET_NOTE}}<!-- e.g., "FY24, parent entity" --></span>
+      </div>
+      <div class="org-stat">
+        <span class="org-stat-label">Federal grants today</span>
+        <span class="org-stat-value">{{ORG_FED_GRANTS_CURRENT}}</span>
+        <span class="org-stat-note">{{ORG_FED_GRANTS_NOTE}}<!-- e.g., "95% privately funded per FY24 990" --></span>
+      </div>
+      <div class="org-stat">
+        <span class="org-stat-label">Qualifying programs</span>
+        <span class="org-stat-value">{{ORG_QUALIFYING_PROGRAMS}}</span>
+        <span class="org-stat-note">{{ORG_QUALIFYING_NOTE}}<!-- e.g., "Across 5 federal agencies" --></span>
+      </div>
+      <div class="org-stat">
+        <span class="org-stat-label">Operating footprint</span>
+        <span class="org-stat-value">{{ORG_FOOTPRINT}}</span>
+        <span class="org-stat-note">{{ORG_FOOTPRINT_NOTE}}<!-- e.g., "Five NYC sites + camp" --></span>
+      </div>
+    </div>
+
+    <!-- Prospectus table -->
+    <div class="prospectus-table">
+
+      <div class="prospectus-table-header">
+        <span>Federal program</span>
+        <span>Agency</span>
+        <span>Award size</span>
+        <span>Application window</span>
+        <span>Status</span>
+      </div>
+
+      <!-- Row 1 -->
+      <div class="prospectus-row">
+        <span class="prospectus-program">{{P_ROW_1_PROGRAM}}</span>
+        <span class="prospectus-agency">{{P_ROW_1_AGENCY}}</span>
+        <span class="prospectus-award">{{P_ROW_1_AWARD}}</span>
+        <span class="prospectus-window">{{P_ROW_1_WINDOW}}</span>
+        <span class="prospectus-status {{P_ROW_1_STATUS_CLASS}}">{{P_ROW_1_STATUS_LABEL}}</span>
+      </div>
+
+      <!-- Row 2 -->
+      <div class="prospectus-row">
+        <span class="prospectus-program">{{P_ROW_2_PROGRAM}}</span>
+        <span class="prospectus-agency">{{P_ROW_2_AGENCY}}</span>
+        <span class="prospectus-award">{{P_ROW_2_AWARD}}</span>
+        <span class="prospectus-window">{{P_ROW_2_WINDOW}}</span>
+        <span class="prospectus-status {{P_ROW_2_STATUS_CLASS}}">{{P_ROW_2_STATUS_LABEL}}</span>
+      </div>
+
+      <!-- Row 3 -->
+      <div class="prospectus-row">
+        <span class="prospectus-program">{{P_ROW_3_PROGRAM}}</span>
+        <span class="prospectus-agency">{{P_ROW_3_AGENCY}}</span>
+        <span class="prospectus-award">{{P_ROW_3_AWARD}}</span>
+        <span class="prospectus-window">{{P_ROW_3_WINDOW}}</span>
+        <span class="prospectus-status {{P_ROW_3_STATUS_CLASS}}">{{P_ROW_3_STATUS_LABEL}}</span>
+      </div>
+
+      <!-- Row 4 -->
+      <div class="prospectus-row">
+        <span class="prospectus-program">{{P_ROW_4_PROGRAM}}</span>
+        <span class="prospectus-agency">{{P_ROW_4_AGENCY}}</span>
+        <span class="prospectus-award">{{P_ROW_4_AWARD}}</span>
+        <span class="prospectus-window">{{P_ROW_4_WINDOW}}</span>
+        <span class="prospectus-status {{P_ROW_4_STATUS_CLASS}}">{{P_ROW_4_STATUS_LABEL}}</span>
+      </div>
+
+      <!-- Row 5 -->
+      <div class="prospectus-row">
+        <span class="prospectus-program">{{P_ROW_5_PROGRAM}}</span>
+        <span class="prospectus-agency">{{P_ROW_5_AGENCY}}</span>
+        <span class="prospectus-award">{{P_ROW_5_AWARD}}</span>
+        <span class="prospectus-window">{{P_ROW_5_WINDOW}}</span>
+        <span class="prospectus-status {{P_ROW_5_STATUS_CLASS}}">{{P_ROW_5_STATUS_LABEL}}</span>
+      </div>
+
+      <!-- Row 6 -->
+      <div class="prospectus-row">
+        <span class="prospectus-program">{{P_ROW_6_PROGRAM}}</span>
+        <span class="prospectus-agency">{{P_ROW_6_AGENCY}}</span>
+        <span class="prospectus-award">{{P_ROW_6_AWARD}}</span>
+        <span class="prospectus-window">{{P_ROW_6_WINDOW}}</span>
+        <span class="prospectus-status {{P_ROW_6_STATUS_CLASS}}">{{P_ROW_6_STATUS_LABEL}}</span>
+      </div>
+
+      <!-- Row 7 -->
+      <div class="prospectus-row">
+        <span class="prospectus-program">{{P_ROW_7_PROGRAM}}</span>
+        <span class="prospectus-agency">{{P_ROW_7_AGENCY}}</span>
+        <span class="prospectus-award">{{P_ROW_7_AWARD}}</span>
+        <span class="prospectus-window">{{P_ROW_7_WINDOW}}</span>
+        <span class="prospectus-status {{P_ROW_7_STATUS_CLASS}}">{{P_ROW_7_STATUS_LABEL}}</span>
+      </div>
+
+      <!-- Row 8 -->
+      <div class="prospectus-row">
+        <span class="prospectus-program">{{P_ROW_8_PROGRAM}}</span>
+        <span class="prospectus-agency">{{P_ROW_8_AGENCY}}</span>
+        <span class="prospectus-award">{{P_ROW_8_AWARD}}</span>
+        <span class="prospectus-window">{{P_ROW_8_WINDOW}}</span>
+        <span class="prospectus-status {{P_ROW_8_STATUS_CLASS}}">{{P_ROW_8_STATUS_LABEL}}</span>
+      </div>
+
+    </div>
+
+    <!-- Dark band — combined opportunity total -->
+    <div class="opp-total-band">
+      <span class="opp-total-label">Combined accessible pool</span>
+      <span class="opp-total-value">{{OPP_TOTAL_VALUE}}</span>
+      <span class="opp-total-caveat">{{OPP_TOTAL_CAVEAT}}<!-- e.g., "National program totals across the eight programs above. Actual subgrant size is set by formula, geography, and competition." --></span>
+    </div>
+
+    <div class="slide-footer">
+      <span>{{DATE}}</span>
+      <span class="page-number">{{FOCUS_PAGE}} / {{TOTAL_PAGES}}</span>
+    </div>
+
+  </div>
+</section>
+
