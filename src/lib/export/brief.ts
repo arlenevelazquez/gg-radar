@@ -22,6 +22,8 @@ export interface BriefNonprofit {
   programs: string[];
   populations: string[];
   qualifiedCount: number;
+  /** Sum of fundingMax across qualified grants; null when no numeric data. */
+  qualifiedFundingTotal: number | null;
   grants: BriefGrant[];
   /** Set when grant lookup failed for this nonprofit; otherwise null. */
   grantsError: string | null;
@@ -82,6 +84,8 @@ export function deriveBrief(
     programs: np.programs,
     populations: np.populations ?? [],
     qualifiedCount: np.grants.status === "ok" ? np.grants.qualifiedCount : 0,
+    qualifiedFundingTotal:
+      np.grants.status === "ok" ? np.grants.qualifiedFundingTotal : null,
     grants: np.grants.status === "ok" ? np.grants.top.map(mapGrant) : [],
     grantsError: np.grants.status === "error" ? np.grants.error ?? "Grant lookup failed" : null,
   }));

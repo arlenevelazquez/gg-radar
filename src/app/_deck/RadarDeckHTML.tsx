@@ -256,6 +256,22 @@ html, body {
   letter-spacing: 0.12em;
   margin-bottom: 14px;
 }
+.np-funding-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+.np-funding-amount {
+  font-family: Lustria, Georgia, serif;
+  font-size: 32px;
+  color: var(--primary);
+  line-height: 1;
+}
+.np-funding-caption {
+  font-size: 12px;
+  color: var(--muted);
+}
 .np-mission {
   font-size: 15px;
   line-height: 1.5;
@@ -416,6 +432,23 @@ function formatDateLong(iso: string): string {
   return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
+function formatCurrencyShort(amount: number): string {
+  if (amount >= 1_000_000_000) {
+    return `$${(amount / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
+  }
+  if (amount >= 1_000_000) {
+    return `$${(amount / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  }
+  if (amount >= 1_000) {
+    return `$${Math.round(amount / 1_000)}K`;
+  }
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
 function SlideHeader({ label }: { label: string }) {
   return (
     <div className="slide-header">
@@ -427,26 +460,15 @@ function SlideHeader({ label }: { label: string }) {
   );
 }
 
-function SlideFooter({
-  brief,
-  page,
-  total,
-}: {
-  brief: RadarBrief;
-  page: number;
-  total: number;
-}) {
+function TitleFooter({ brief }: { brief: RadarBrief }) {
   return (
     <div className="slide-footer">
       <span>{formatDateLong(brief.generatedAt)}</span>
-      <span>
-        {String(page).padStart(2, "0")} / {String(total).padStart(2, "0")}
-      </span>
     </div>
   );
 }
 
-function TitleSlide({ brief, total }: { brief: RadarBrief; total: number }) {
+function TitleSlide({ brief }: { brief: RadarBrief }) {
   return (
     <section className="slide">
       <SlideHeader label={`Parent · ${brief.parent.typeLabel}`} />
@@ -482,7 +504,7 @@ function TitleSlide({ brief, total }: { brief: RadarBrief; total: number }) {
           </div>
         </div>
       </div>
-      <SlideFooter brief={brief} page={1} total={total} />
+      <TitleFooter brief={brief} />
     </section>
   );
 }
@@ -497,17 +519,7 @@ function MatchBadge({ grant }: { grant: NonprofitGrant }) {
   );
 }
 
-function NonprofitSlide({
-  brief,
-  np,
-  page,
-  total,
-}: {
-  brief: RadarBrief;
-  np: BriefNonprofit;
-  page: number;
-  total: number;
-}) {
+function NonprofitSlide({ brief, np }: { brief: RadarBrief; np: BriefNonprofit }) {
   return (
     <section className="slide">
       <SlideHeader label={`${brief.parent.name} · ${np.connectionLabel}`} />
@@ -517,6 +529,17 @@ function NonprofitSlide({
           <span className="chip">{np.connectionLabel}</span>
         </div>
         <p className="np-location">{np.location}</p>
+        {np.qualifiedFundingTotal !== null && (
+          <p className="np-funding-stat">
+            <span className="np-funding-amount">
+              {formatCurrencyShort(np.qualifiedFundingTotal)}
+            </span>
+            <span className="np-funding-caption">
+              possible · {np.qualifiedCount} qualified grant
+              {np.qualifiedCount === 1 ? "" : "s"}
+            </span>
+          </p>
+        )}
         <p className="np-mission">{np.mission}</p>
         <p className="np-relationship">{np.relationship}</p>
         {np.programs.length > 0 && (
@@ -566,12 +589,11 @@ function NonprofitSlide({
           </table>
         )}
       </div>
-      <SlideFooter brief={brief} page={page} total={total} />
     </section>
   );
 }
 
-function CtaSlide({ brief, total }: { brief: RadarBrief; total: number }) {
+function CtaSlide() {
   return (
     <section className="slide cta-slide">
       <SlideHeader label="Methodology + next step" />
@@ -613,35 +635,27 @@ function CtaSlide({ brief, total }: { brief: RadarBrief; total: number }) {
               <span className="legend-swatch-dot" style={{ background: QUALITY_FILL.weak }} />
               Weak
             </span>
-            <span className="legend-detail">Below 50 — forced fit</span>
+            <span className="legend-detail">Below 50</span>
           </div>
         </div>
         <a className="cta-link" href="https://greatgrants.ai">
           Check out Great Grants →
         </a>
       </div>
-      <SlideFooter brief={brief} page={total} total={total} />
     </section>
   );
 }
 
 export function RadarDeckHTML({ brief }: { brief: RadarBrief }) {
-  const total = brief.nonprofits.length + 2;
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: DECK_CSS }} />
       <div className="deck">
-        <TitleSlide brief={brief} total={total} />
-        {brief.nonprofits.map((np, i) => (
-          <NonprofitSlide
-            key={np.name}
-            brief={brief}
-            np={np}
-            page={i + 2}
-            total={total}
-          />
+        <TitleSlide brief={brief} />
+        {brief.nonprofits.map((np) => (
+          <NonprofitSlide key={np.name} brief={brief} np={np} />
         ))}
-        <CtaSlide brief={brief} total={total} />
+        <CtaSlide />
       </div>
     </>
   );

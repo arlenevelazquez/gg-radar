@@ -39,6 +39,7 @@ const FIXTURE: RadarResponse = {
       grants: {
         status: "ok",
         qualifiedCount: 5,
+        qualifiedFundingTotal: 37_950_000,
         rawCount: 10,
         cappedAtLimit: false,
         top: [
@@ -123,6 +124,7 @@ const FIXTURE: RadarResponse = {
       grants: {
         status: "ok",
         qualifiedCount: 3,
+        qualifiedFundingTotal: 2_300_000,
         rawCount: 8,
         cappedAtLimit: false,
         top: [
@@ -181,6 +183,7 @@ const FIXTURE: RadarResponse = {
       grants: {
         status: "ok",
         qualifiedCount: 2,
+        qualifiedFundingTotal: 1_450_000,
         rawCount: 6,
         cappedAtLimit: false,
         top: [
