@@ -9,8 +9,10 @@ Enter a parent company (corporation, foundation, family office), and Radar:
    Foundation, LifeShape Foundation).
 2. Queries **GrantGuru** for the top federal grant matches for each tied
    nonprofit, with honest match-quality scoring.
-3. Surfaces the results as a public marketing teaser, with a CTA to upgrade
-   into Great Grants for higher-fidelity matches.
+3. Surfaces the results as a public marketing teaser — an **ecosystem map**
+   of the parent → tied-nonprofit relationships at the top, per-nonprofit
+   grant lists in a card grid below, and a CTA to upgrade into Great Grants
+   for higher-fidelity matches.
 
 > Radar is a **discovery / lead-gen surface**. It runs on public web
 > research, which is a thin signal. Great Grants users get dramatically
