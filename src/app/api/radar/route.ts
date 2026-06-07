@@ -32,7 +32,7 @@ export interface TopGrant {
   matchQuality: MatchQuality | null;
 }
 
-interface NonprofitGrantsBlock {
+export interface NonprofitGrantsBlock {
   status: "ok" | "error";
   /** Count of returned grants with matchScore >= QUALIFIED_THRESHOLD (50). */
   qualifiedCount: number;
@@ -44,7 +44,7 @@ interface NonprofitGrantsBlock {
   error?: string;
 }
 
-interface RadarResponse {
+export interface RadarResponse {
   parent: ParentProfile;
   summary: string;
   nonprofits: Array<ConnectedNonprofit & { grants: NonprofitGrantsBlock }>;
