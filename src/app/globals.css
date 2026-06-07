@@ -1,15 +1,19 @@
 @import "tailwindcss";
 
 @theme {
-  /* GreatGrants brand teal */
+  /* GreatGrants brand teal — full 11-step palette ported from great-grants */
+  --color-brand-25: #f5fefc;
   --color-brand-50: #f0fdf9;
   --color-brand-100: #ccfbef;
+  --color-brand-200: #99f6e0;
   --color-brand-300: #5fe9d0;
   --color-brand-400: #2ed3b7;
   --color-brand-500: #15b79e;
   --color-brand-600: #0e9384;
   --color-brand-700: #107569;
   --color-brand-800: #125d56;
+  --color-brand-900: #134e48;
+  --color-brand-950: #0a2e2b;
 
   /* Gray neutrals */
   --color-gray-25: #fdfdfd;
