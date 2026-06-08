@@ -32,6 +32,14 @@ function isServerless(): boolean {
 
 async function launchBrowser(): Promise<Browser> {
   if (isServerless()) {
+    // @sparticuz/chromium decides whether to extract the system-library
+    // tarball (al2023.tar.br — which contains libnss3, libxss, etc.) by
+    // sniffing AWS_EXECUTION_ENV. Vercel runs on Lambda underneath but the
+    // var isn't always set to a string the library's regex recognizes,
+    // which leaves chromium itself extracted but its shared libs missing.
+    // Set the value ourselves so the al2023 extraction always runs.
+    process.env.AWS_EXECUTION_ENV = "AWS_Lambda_nodejs22.x";
+
     const { default: chromium } = await import("@sparticuz/chromium");
     const { chromium: playwright } = await import("playwright-core");
     return playwright.launch({
