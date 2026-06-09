@@ -1,4 +1,4 @@
-import type { BriefNonprofit, RadarBrief } from "@/lib/export/brief";
+import type { BriefGrantsBlock, BriefNonprofit, RadarBrief } from "@/lib/export/brief";
 import { MATCH_QUALITY_LABEL } from "@/lib/export/labels";
 
 /**
@@ -519,6 +519,94 @@ function MatchBadge({ grant }: { grant: NonprofitGrant }) {
   );
 }
 
+/** Funding headline ($X possible · N qualified grants). */
+function FundingStat({ block }: { block: BriefGrantsBlock }) {
+  if (block.qualifiedFundingTotal === null) return null;
+  return (
+    <p className="np-funding-stat">
+      <span className="np-funding-amount">{formatCurrencyShort(block.qualifiedFundingTotal)}</span>
+      <span className="np-funding-caption">
+        possible · {block.qualifiedCount} qualified grant
+        {block.qualifiedCount === 1 ? "" : "s"}
+      </span>
+    </p>
+  );
+}
+
+/** "Top N federal grants" label + table. Shared by parent + nonprofit slides. */
+function GrantsSection({ block }: { block: BriefGrantsBlock }) {
+  return (
+    <>
+      <p className="grants-block-label">
+        {block.grantsError
+          ? "Grant lookup failed"
+          : `Top ${block.grants.length} federal grants · ${block.qualifiedCount} qualified (≥50%)`}
+      </p>
+      {block.grantsError ? (
+        <p className="grants-empty">{block.grantsError}</p>
+      ) : block.grants.length === 0 ? (
+        <p className="grants-empty">No grant matches returned.</p>
+      ) : (
+        <table className="grants-table">
+          <thead>
+            <tr>
+              <th className="col-rank">#</th>
+              <th className="col-program">Program</th>
+              <th className="col-agency">Agency</th>
+              <th className="col-funding">Funding</th>
+              <th className="col-closing">Closes</th>
+              <th className="col-match">Match</th>
+            </tr>
+          </thead>
+          <tbody>
+            {block.grants.map((g) => (
+              <tr key={`${g.rank}-${g.programName}`}>
+                <td className="col-rank">{g.rank}</td>
+                <td className="col-program">{g.programName}</td>
+                <td className="col-agency">{g.agency ?? "—"}</td>
+                <td className="col-funding">{g.fundingDisplay ?? "—"}</td>
+                <td className="col-closing">{g.closingDisplay ?? "—"}</td>
+                <td className="col-match">
+                  <MatchBadge grant={g} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
+  );
+}
+
+/** Grant results for the parent entity itself. */
+function ParentGrantsSlide({ brief }: { brief: RadarBrief }) {
+  const p = brief.parent;
+  return (
+    <section className="slide">
+      <SlideHeader label={`${p.name} · Parent entity`} />
+      <div className="slide-body">
+        <div className="np-header">
+          <h2 className="np-name slide-display">{p.name}</h2>
+          <span className="chip">{p.typeLabel}</span>
+        </div>
+        {p.location !== "—" && <p className="np-location">{p.location}</p>}
+        <FundingStat block={p.grants} />
+        <p className="np-mission">{p.mission}</p>
+        {p.programs.length > 0 && (
+          <div className="np-tags">
+            {p.programs.slice(0, 6).map((pr) => (
+              <span key={pr} className="np-tag">
+                {pr}
+              </span>
+            ))}
+          </div>
+        )}
+        <GrantsSection block={p.grants} />
+      </div>
+    </section>
+  );
+}
+
 function NonprofitSlide({ brief, np }: { brief: RadarBrief; np: BriefNonprofit }) {
   return (
     <section className="slide">
@@ -529,17 +617,7 @@ function NonprofitSlide({ brief, np }: { brief: RadarBrief; np: BriefNonprofit }
           <span className="chip">{np.connectionLabel}</span>
         </div>
         <p className="np-location">{np.location}</p>
-        {np.qualifiedFundingTotal !== null && (
-          <p className="np-funding-stat">
-            <span className="np-funding-amount">
-              {formatCurrencyShort(np.qualifiedFundingTotal)}
-            </span>
-            <span className="np-funding-caption">
-              possible · {np.qualifiedCount} qualified grant
-              {np.qualifiedCount === 1 ? "" : "s"}
-            </span>
-          </p>
-        )}
+        <FundingStat block={np} />
         <p className="np-mission">{np.mission}</p>
         <p className="np-relationship">{np.relationship}</p>
         {np.programs.length > 0 && (
@@ -551,43 +629,7 @@ function NonprofitSlide({ brief, np }: { brief: RadarBrief; np: BriefNonprofit }
             ))}
           </div>
         )}
-        <p className="grants-block-label">
-          {np.grantsError
-            ? "Grant lookup failed"
-            : `Top ${np.grants.length} federal grants · ${np.qualifiedCount} qualified (≥50%)`}
-        </p>
-        {np.grantsError ? (
-          <p className="grants-empty">{np.grantsError}</p>
-        ) : np.grants.length === 0 ? (
-          <p className="grants-empty">No grant matches returned.</p>
-        ) : (
-          <table className="grants-table">
-            <thead>
-              <tr>
-                <th className="col-rank">#</th>
-                <th className="col-program">Program</th>
-                <th className="col-agency">Agency</th>
-                <th className="col-funding">Funding</th>
-                <th className="col-closing">Closes</th>
-                <th className="col-match">Match</th>
-              </tr>
-            </thead>
-            <tbody>
-              {np.grants.map((g) => (
-                <tr key={`${g.rank}-${g.programName}`}>
-                  <td className="col-rank">{g.rank}</td>
-                  <td className="col-program">{g.programName}</td>
-                  <td className="col-agency">{g.agency ?? "—"}</td>
-                  <td className="col-funding">{g.fundingDisplay ?? "—"}</td>
-                  <td className="col-closing">{g.closingDisplay ?? "—"}</td>
-                  <td className="col-match">
-                    <MatchBadge grant={g} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <GrantsSection block={np} />
       </div>
     </section>
   );
@@ -652,6 +694,7 @@ export function RadarDeckHTML({ brief }: { brief: RadarBrief }) {
       <style dangerouslySetInnerHTML={{ __html: DECK_CSS }} />
       <div className="deck">
         <TitleSlide brief={brief} />
+        <ParentGrantsSlide brief={brief} />
         {brief.nonprofits.map((np) => (
           <NonprofitSlide key={np.name} brief={brief} np={np} />
         ))}
