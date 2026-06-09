@@ -12,6 +12,24 @@ export interface ParentProfile {
   givingPrograms: string[];
   /** Best-effort headquarters location, e.g. "Atlanta, GA". */
   headquarters?: string;
+  /**
+   * What the parent organization itself does, framed for grant matching —
+   * its programmatic / charitable mission, not its giving footprint. Used to
+   * run a federal-grant search on the parent entity directly.
+   */
+  mission: string;
+  /** 3-6 program / focus areas the parent operates, for grant matching. */
+  programs: string[];
+  /** Populations the parent serves, if applicable. */
+  populations?: string[];
+  /** Structured HQ location for the grant-search location filter. */
+  location?: {
+    city?: string;
+    /** 2-letter US state code, e.g. "GA" — or null if national/unknown. */
+    state?: string | null;
+    /** ISO country, default "US". */
+    country?: string;
+  };
 }
 
 export type ConnectionType =

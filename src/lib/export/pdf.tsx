@@ -1,3 +1,4 @@
+import { gzipSync } from "node:zlib";
 import type { Browser } from "playwright-core";
 import type { RadarBrief } from "./brief";
 
@@ -8,21 +9,24 @@ import type { RadarBrief } from "./brief";
  * throws when it sees that import in the App Router dependency graph. So
  * instead we let Next render the deck via its normal SSR pipeline:
  *
- *  1. base64-encode the brief and stuff it in an `x-radar-brief` HTTP header
+ *  1. gzip + base64-encode the brief, stuff it in an `x-radar-brief` header
  *  2. launch chromium (Sparticuz on Vercel, system playwright in dev)
  *  3. page.goto(`${origin}/internal/deck`) with extraHTTPHeaders set
  *  4. that page reads the header, decodes the brief, renders the deck
  *  5. page.pdf({ width: 13.333in, height: 7.5in })
  *
- * Brief size note: HTTP servers cap header values around 16 KB (Node default).
- * A typical 3-nonprofit brief is well under that, but very large results
- * (lots of nonprofits or grants) may need compression or a stash endpoint.
+ * Brief size note: Node caps HTTP header values at ~16 KB by default. A
+ * real-world brief with the parent search + a few nonprofits and their
+ * grant arrays runs ~20-30 KB raw — well over the limit. We gzip before
+ * base64, which compresses the JSON to ~25-30% of its raw size, leaving
+ * comfortable headroom even for the largest briefs we expect.
  */
 
 const HEADER_NAME = "x-radar-brief";
 
 function encodeBrief(brief: RadarBrief): string {
-  return Buffer.from(JSON.stringify(brief), "utf8").toString("base64");
+  const json = JSON.stringify(brief);
+  return gzipSync(Buffer.from(json, "utf8")).toString("base64");
 }
 
 /** True when running inside a Vercel/Lambda-style serverless function. */

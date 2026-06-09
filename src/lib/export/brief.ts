@@ -1,4 +1,9 @@
-import type { MatchQuality, RadarResponse, TopGrant } from "@/app/api/radar/route";
+import type {
+  MatchQuality,
+  NonprofitGrantsBlock,
+  RadarResponse,
+  TopGrant,
+} from "@/app/api/radar/route";
 import type { NonprofitProfile } from "@/lib/grant-guru/prompt";
 import { CONNECTION_LABEL, PARENT_TYPE_LABEL } from "./labels";
 
@@ -13,7 +18,17 @@ export interface BriefGrant {
   url: string | null;
 }
 
-export interface BriefNonprofit {
+/** Grant-search results shared by the parent entity and each tied nonprofit. */
+export interface BriefGrantsBlock {
+  qualifiedCount: number;
+  /** Sum of fundingMax across qualified grants; null when no numeric data. */
+  qualifiedFundingTotal: number | null;
+  grants: BriefGrant[];
+  /** Set when the grant lookup failed; otherwise null. */
+  grantsError: string | null;
+}
+
+export interface BriefNonprofit extends BriefGrantsBlock {
   name: string;
   connectionLabel: string;
   location: string;
@@ -21,12 +36,6 @@ export interface BriefNonprofit {
   relationship: string;
   programs: string[];
   populations: string[];
-  qualifiedCount: number;
-  /** Sum of fundingMax across qualified grants; null when no numeric data. */
-  qualifiedFundingTotal: number | null;
-  grants: BriefGrant[];
-  /** Set when grant lookup failed for this nonprofit; otherwise null. */
-  grantsError: string | null;
 }
 
 export interface RadarBrief {
@@ -38,6 +47,14 @@ export interface RadarBrief {
     headquarters: string | null;
     description: string;
     givingPrograms: string[];
+    /** Parent's own programmatic mission, used for its grant search. */
+    mission: string;
+    /** Parent's own program / focus areas. */
+    programs: string[];
+    /** Formatted HQ location for the parent grants slide. */
+    location: string;
+    /** Federal-grant results for the parent entity itself. */
+    grants: BriefGrantsBlock;
   };
   summary: string;
   totals: {
@@ -71,6 +88,15 @@ function mapGrant(g: TopGrant, idx: number): BriefGrant {
   };
 }
 
+function mapGrantsBlock(grants: NonprofitGrantsBlock): BriefGrantsBlock {
+  return {
+    qualifiedCount: grants.status === "ok" ? grants.qualifiedCount : 0,
+    qualifiedFundingTotal: grants.status === "ok" ? grants.qualifiedFundingTotal : null,
+    grants: grants.status === "ok" ? grants.top.map(mapGrant) : [],
+    grantsError: grants.status === "error" ? grants.error ?? "Grant lookup failed" : null,
+  };
+}
+
 export function deriveBrief(
   response: RadarResponse,
   generatedAt: string = new Date().toISOString()
@@ -83,11 +109,7 @@ export function deriveBrief(
     relationship: np.relationship,
     programs: np.programs,
     populations: np.populations ?? [],
-    qualifiedCount: np.grants.status === "ok" ? np.grants.qualifiedCount : 0,
-    qualifiedFundingTotal:
-      np.grants.status === "ok" ? np.grants.qualifiedFundingTotal : null,
-    grants: np.grants.status === "ok" ? np.grants.top.map(mapGrant) : [],
-    grantsError: np.grants.status === "error" ? np.grants.error ?? "Grant lookup failed" : null,
+    ...mapGrantsBlock(np.grants),
   }));
 
   const qualifiedGrantCount = nonprofits.reduce((sum, np) => sum + np.qualifiedCount, 0);
@@ -100,6 +122,12 @@ export function deriveBrief(
       headquarters: response.parent.headquarters ?? null,
       description: response.parent.description,
       givingPrograms: response.parent.givingPrograms,
+      mission: response.parent.mission?.trim() || response.parent.description,
+      programs: response.parent.programs?.length
+        ? response.parent.programs
+        : response.parent.givingPrograms,
+      location: locationText(response.parent.location ?? undefined),
+      grants: mapGrantsBlock(response.parent.grants),
     },
     summary: response.summary,
     totals: {

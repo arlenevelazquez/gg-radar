@@ -1,3 +1,4 @@
+import { gunzipSync } from "node:zlib";
 import { headers } from "next/headers";
 import { RadarDeckHTML } from "@/app/_deck/RadarDeckHTML";
 import type { RadarBrief } from "@/lib/export/brief";
@@ -6,9 +7,10 @@ import type { RadarBrief } from "@/lib/export/brief";
  * Internal-use page rendered by the PDF export pipeline.
  *
  * Playwright (launched by /api/radar/export/pdf) navigates here with the
- * brief encoded as an `x-radar-brief` request header (base64 JSON). The
- * page reads the header, decodes, and renders the deck via Next's normal
- * server-side pipeline — no react-dom/server required.
+ * brief in an `x-radar-brief` request header (gzip + base64 JSON — gzip
+ * is required because raw JSON exceeds Node's 16 KB header cap for real
+ * briefs). The page reads the header, decodes, and renders the deck via
+ * Next's normal server-side pipeline — no react-dom/server required.
  *
  * Reachable to humans, but useless without the header — it just shows a
  * short notice.
@@ -47,7 +49,8 @@ export default async function InternalDeckPage() {
 
   let brief: RadarBrief;
   try {
-    const decoded = Buffer.from(encoded, "base64").toString("utf8");
+    const gzipped = Buffer.from(encoded, "base64");
+    const decoded = gunzipSync(gzipped).toString("utf8");
     brief = JSON.parse(decoded) as RadarBrief;
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Could not parse brief.";

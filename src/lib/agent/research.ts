@@ -74,11 +74,21 @@ The bright line: was this nonprofit FOUNDED, BRANDED, or STAFFED by the parent o
 3. Most parents have 1-3 tied nonprofits. Some larger families have up to 6. If you can only confidently identify ONE, return only one — quality over quantity.
 4. **If after thorough searching you cannot identify ANY structurally-tied nonprofit, that is a valid outcome.** Write a report explaining what the parent's philanthropic structure looks like (e.g. "donates through a donor-advised fund", "no public foundation") and return an empty list.
 
+# Parent grant profile (REQUIRED)
+Separately from the tied nonprofits, also build a grant-search profile for the PARENT entity ITSELF, because we now run a federal-grant search on the parent too. Regardless of the parent's tax status, capture:
+- **mission**: what the parent organization actually does, programmatically — its charitable / community / service mission framed the way a grant reviewer would read it. For a for-profit, describe its community-investment and social-impact work, not its commercial products.
+- **programs**: 3-6 concrete program or focus areas (e.g. "youth education", "hunger relief", "disaster response", "workforce development").
+- **populations**: the populations or communities the parent's giving and programs serve, if identifiable.
+- **headquarters / location**: city and 2-letter US state.
+
+Do this even when no tied nonprofit is found.
+
 # Output
 Write a free-text report:
 - Short profile of the PARENT (what they are, HQ, who founded them, who runs the family's philanthropy)
+- A PARENT GRANT PROFILE block: the parent's own mission, 3-6 program/focus areas, populations served, and HQ city + state — as described above
 - For EACH tied nonprofit: name, location, mission, programs, populations, structural connection, and which of the three connection types it is (corporate_foundation / family_foundation / affiliated_nonprofit)
-- If no nonprofits found, explain why and stop
+- If no nonprofits found, explain why — but STILL provide the parent grant profile
 
 You have up to ${MAX_STEPS} reasoning steps and ${MAX_WEB_SEARCHES} web_search calls. Be efficient and rigorous.`;
 
@@ -91,6 +101,28 @@ const researchSchema = z.object({
     description: z.string(),
     givingPrograms: z.array(z.string()).describe("Named philanthropic programs the parent operates, for context only. Empty if none."),
     headquarters: z.string().optional(),
+    mission: z
+      .string()
+      .describe(
+        "What the parent organization itself does, programmatically, framed for grant matching (its charitable / community / service mission). Used to run a federal-grant search on the parent directly. Never empty — describe the parent's social-impact work even for a for-profit."
+      ),
+    programs: z
+      .array(z.string())
+      .describe("3-6 concrete program / focus areas the parent operates (e.g. 'youth education', 'hunger relief')."),
+    populations: z
+      .array(z.string())
+      .describe("Populations / communities the parent's giving and programs serve. Empty if unknown.")
+      .optional(),
+    location: z
+      .object({
+        city: z.string().optional(),
+        state: z
+          .string()
+          .describe('2-letter US state code, e.g. "GA". Use null if national or unknown.')
+          .nullable(),
+        country: z.string().describe('ISO country code, default "US".').optional(),
+      })
+      .optional(),
   }),
   summary: z
     .string()
@@ -150,6 +182,7 @@ export async function runResearch(parentName: string): Promise<ResearchResult> {
     prompt: `A research analyst produced the report below for the parent entity "${parentName}". Convert it into structured JSON matching the schema.
 
 Rules:
+- For the PARENT, also populate its grant-search fields from the report's parent grant profile: "mission" (what the parent does programmatically, for grant matching — never leave empty), "programs" (3-6 focus areas), "populations" (communities served, if any), and "location" (HQ city + 2-letter state). If the report only gives a giving description, derive a reasonable mission and program list from it.
 - Include ONLY nonprofits that are STRUCTURALLY TIED to the parent — founded by, branded by, named after, or operationally tied (shared board, founder family) to the parent.
 - EXCLUDE grant recipients, award winners, sponsored partners, and any nonprofit that is merely a beneficiary of the parent's giving rather than a sibling organization.
 - For US locations, prefer 2-letter state codes ("GA" not "Georgia"). If unknown, set state to null.

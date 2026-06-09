@@ -10,6 +10,20 @@ interface ParentProfile {
   description: string;
   givingPrograms: string[];
   headquarters?: string;
+  mission: string;
+  programs: string[];
+  populations?: string[];
+  location?: { city?: string; state?: string | null; country?: string };
+}
+
+interface GrantsBlock {
+  status: "ok" | "error";
+  qualifiedCount: number;
+  qualifiedFundingTotal: number | null;
+  rawCount: number;
+  cappedAtLimit: boolean;
+  top: TopGrant[];
+  error?: string;
 }
 
 type MatchQuality = "excellent" | "good" | "possible" | "weak";
@@ -36,15 +50,7 @@ interface Nonprofit {
   location?: { city?: string; state?: string | null; country?: string };
   relationship: string;
   connectionType: "corporate_foundation" | "family_foundation" | "affiliated_nonprofit" | "other";
-  grants: {
-    status: "ok" | "error";
-    qualifiedCount: number;
-    qualifiedFundingTotal: number | null;
-    rawCount: number;
-    cappedAtLimit: boolean;
-    top: TopGrant[];
-    error?: string;
-  };
+  grants: GrantsBlock;
 }
 
 function formatCurrencyShort(amount: number): string {
@@ -84,7 +90,7 @@ const QUALITY_BADGE: Record<MatchQuality, { label: string; className: string }> 
 };
 
 interface RadarResponse {
-  parent: ParentProfile;
+  parent: ParentProfile & { grants: GrantsBlock };
   summary: string;
   nonprofits: Nonprofit[];
 }
@@ -264,6 +270,14 @@ export default function Home() {
               <EcosystemMap parent={result.parent} nonprofits={result.nonprofits} />
             )}
 
+            {/* Parent grant results — the parent entity searched directly */}
+            <div>
+              <p className="text-xs uppercase tracking-widest text-gray-500 mb-3">
+                Parent organization grants
+              </p>
+              <ParentCard parent={result.parent} />
+            </div>
+
             {/* Nonprofit cards */}
             {result.nonprofits.length === 0 ? (
               <div className="text-center py-12 bg-gray-50 border border-gray-200 rounded-xl">
@@ -385,6 +399,127 @@ function EcosystemMap({
   );
 }
 
+/** Funding headline ($X possible · N qualified grants). Shared by parent + nonprofit cards. */
+function FundingHeadline({ grants }: { grants: GrantsBlock }) {
+  if (grants.status !== "ok" || grants.qualifiedFundingTotal === null) return null;
+  return (
+    <div className="mb-2 flex items-baseline gap-2">
+      <span className="font-display text-2xl text-brand-700 leading-none">
+        {formatCurrencyShort(grants.qualifiedFundingTotal)}
+      </span>
+      <span className="text-[11px] text-gray-500 leading-tight">
+        possible · {grants.qualifiedCount} qualified grant
+        {grants.qualifiedCount === 1 ? "" : "s"}
+      </span>
+    </div>
+  );
+}
+
+/** "Top N federal grants" list. Shared by parent + nonprofit cards. */
+function GrantsDetail({ grants }: { grants: GrantsBlock }) {
+  if (grants.status === "error") {
+    return <div className="text-xs text-red-600">Grant lookup failed: {grants.error}</div>;
+  }
+  return (
+    <>
+      <div className="flex items-baseline justify-between mb-3">
+        <p className="text-xs uppercase tracking-widest text-gray-500">
+          Top {grants.top.length} federal grant{grants.top.length === 1 ? "" : "s"}
+        </p>
+        <p className="text-xs text-gray-600">
+          <span className="font-semibold text-brand-700">{grants.qualifiedCount}</span>{" "}
+          qualified <span className="text-gray-400">(≥50%)</span>
+        </p>
+      </div>
+      {grants.top.length === 0 ? (
+        <p className="text-xs text-gray-500">No grant matches returned.</p>
+      ) : (
+        <ol className="space-y-3">
+          {grants.top.map((g, i) => {
+            const badge = g.matchQuality ? QUALITY_BADGE[g.matchQuality] : null;
+            const meta: string[] = [];
+            if (g.fundingDisplay) meta.push(g.fundingDisplay);
+            if (g.closingDateDisplay) meta.push(`closes ${g.closingDateDisplay}`);
+            else if (g.closingInfo) meta.push(g.closingInfo);
+            if (g.difficulty) meta.push(g.difficulty);
+            if (g.competitive === true) meta.push("Competitive");
+            return (
+              <li key={g.guid} className="text-xs flex items-start gap-2">
+                <span className="shrink-0 w-4 text-right text-gray-400 mt-0.5 font-medium">
+                  {i + 1}.
+                </span>
+                {badge && (
+                  <span
+                    className={`shrink-0 mt-0.5 text-[9px] font-medium px-1.5 py-0.5 rounded border ${badge.className}`}
+                  >
+                    {g.matchScore}%
+                  </span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-gray-900 leading-snug">{g.programName}</p>
+                  {g.agency && (
+                    <p className="text-gray-500 text-[11px] mt-0.5 truncate">{g.agency}</p>
+                  )}
+                  {meta.length > 0 && (
+                    <p className="text-gray-500 text-[11px] mt-0.5">{meta.join(" · ")}</p>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </>
+  );
+}
+
+/** Grant results for the parent entity itself, rendered as its own distinct card. */
+function ParentCard({ parent }: { parent: ParentProfile & { grants: GrantsBlock } }) {
+  const programs = parent.programs ?? [];
+  return (
+    <article
+      id="parent-org"
+      className="bg-white border-2 border-brand-200 rounded-xl p-6 shadow-sm scroll-mt-8 target:ring-2 target:ring-brand-400 target:ring-offset-2"
+    >
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div>
+          <span className="text-[10px] uppercase tracking-widest text-brand-700 font-medium block mb-0.5">
+            Parent entity
+          </span>
+          <h3 className="font-display text-xl text-gray-900 leading-tight">{parent.name}</h3>
+        </div>
+        <span className="shrink-0 bg-brand-50 text-brand-700 text-[10px] font-medium px-2 py-0.5 rounded-full border border-brand-100 uppercase tracking-wider">
+          {PARENT_TYPE_LABEL[parent.type]}
+        </span>
+      </div>
+      <FundingHeadline grants={parent.grants} />
+      {parent.headquarters && (
+        <p className="text-xs text-gray-500 mb-3">📍 {parent.headquarters}</p>
+      )}
+      <p className="text-sm text-gray-600 leading-relaxed mb-3">
+        {parent.mission?.trim() || parent.description}
+      </p>
+
+      {programs.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-4">
+          {programs.slice(0, 6).map((p) => (
+            <span
+              key={p}
+              className="bg-gray-100 text-gray-700 text-[10px] font-medium px-2 py-0.5 rounded"
+            >
+              {p}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="pt-4 border-t border-gray-100">
+        <GrantsDetail grants={parent.grants} />
+      </div>
+    </article>
+  );
+}
+
 function NonprofitCard({ np }: { np: Nonprofit }) {
   return (
     <article
@@ -397,17 +532,7 @@ function NonprofitCard({ np }: { np: Nonprofit }) {
           {CONNECTION_LABEL[np.connectionType]}
         </span>
       </div>
-      {np.grants.status === "ok" && np.grants.qualifiedFundingTotal !== null && (
-        <div className="mb-2 flex items-baseline gap-2">
-          <span className="font-display text-2xl text-brand-700 leading-none">
-            {formatCurrencyShort(np.grants.qualifiedFundingTotal)}
-          </span>
-          <span className="text-[11px] text-gray-500 leading-tight">
-            possible · {np.grants.qualifiedCount} qualified grant
-            {np.grants.qualifiedCount === 1 ? "" : "s"}
-          </span>
-        </div>
-      )}
+      <FundingHeadline grants={np.grants} />
       <p className="text-xs text-gray-500 mb-3">{locationText(np.location)}</p>
       <p className="text-sm text-gray-600 leading-relaxed mb-3 line-clamp-3">{np.mission}</p>
       <p className="text-xs text-gray-500 italic mb-4 border-l-2 border-gray-200 pl-2">
@@ -428,61 +553,7 @@ function NonprofitCard({ np }: { np: Nonprofit }) {
       )}
 
       <div className="pt-4 border-t border-gray-100">
-        {np.grants.status === "error" ? (
-          <div className="text-xs text-red-600">Grant lookup failed: {np.grants.error}</div>
-        ) : (
-          <>
-            <div className="flex items-baseline justify-between mb-3">
-              <p className="text-xs uppercase tracking-widest text-gray-500">
-                Top {np.grants.top.length} federal grant{np.grants.top.length === 1 ? "" : "s"}
-              </p>
-              <p className="text-xs text-gray-600">
-                <span className="font-semibold text-brand-700">{np.grants.qualifiedCount}</span>{" "}
-                qualified <span className="text-gray-400">(≥50%)</span>
-              </p>
-            </div>
-            {np.grants.top.length === 0 ? (
-              <p className="text-xs text-gray-500">No grant matches returned.</p>
-            ) : (
-              <ol className="space-y-3">
-                {np.grants.top.map((g, i) => {
-                  const badge = g.matchQuality ? QUALITY_BADGE[g.matchQuality] : null;
-                  const meta: string[] = [];
-                  if (g.fundingDisplay) meta.push(g.fundingDisplay);
-                  if (g.closingDateDisplay) meta.push(`closes ${g.closingDateDisplay}`);
-                  else if (g.closingInfo) meta.push(g.closingInfo);
-                  if (g.difficulty) meta.push(g.difficulty);
-                  if (g.competitive === true) meta.push("Competitive");
-                  return (
-                    <li key={g.guid} className="text-xs flex items-start gap-2">
-                      <span className="shrink-0 w-4 text-right text-gray-400 mt-0.5 font-medium">
-                        {i + 1}.
-                      </span>
-                      {badge && (
-                        <span
-                          className={`shrink-0 mt-0.5 text-[9px] font-medium px-1.5 py-0.5 rounded border ${badge.className}`}
-                        >
-                          {g.matchScore}%
-                        </span>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-gray-900 leading-snug">{g.programName}</p>
-                        {g.agency && (
-                          <p className="text-gray-500 text-[11px] mt-0.5 truncate">{g.agency}</p>
-                        )}
-                        {meta.length > 0 && (
-                          <p className="text-gray-500 text-[11px] mt-0.5">
-                            {meta.join(" · ")}
-                          </p>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ol>
-            )}
-          </>
-        )}
+        <GrantsDetail grants={np.grants} />
       </div>
     </article>
   );

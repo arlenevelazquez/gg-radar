@@ -52,7 +52,8 @@ export interface NonprofitGrantsBlock {
 }
 
 export interface RadarResponse {
-  parent: ParentProfile;
+  /** Parent entity profile, enriched with a federal-grant search run on the parent itself. */
+  parent: ParentProfile & { grants: NonprofitGrantsBlock };
   summary: string;
   nonprofits: Array<ConnectedNonprofit & { grants: NonprofitGrantsBlock }>;
 }
@@ -153,15 +154,9 @@ function sumQualifiedFunding(grants: GrantGuruGrant[]): number | null {
   return any ? sum : null;
 }
 
-async function lookupGrantsFor(np: ConnectedNonprofit): Promise<NonprofitGrantsBlock> {
+/** Run a GrantGuru search for any profile. One failure must not kill the rest. */
+async function lookupGrants(profile: NonprofitProfile): Promise<NonprofitGrantsBlock> {
   try {
-    const profile: NonprofitProfile = {
-      name: np.name,
-      mission: np.mission,
-      programs: np.programs,
-      populations: np.populations,
-      location: np.location ?? undefined,
-    };
     const body = buildSearchBody(profile, SEARCH_LIMIT);
     const { grants } = await searchGrants(body);
     return {
@@ -183,6 +178,30 @@ async function lookupGrantsFor(np: ConnectedNonprofit): Promise<NonprofitGrantsB
       error: err instanceof Error ? err.message : "GrantGuru search failed",
     };
   }
+}
+
+function lookupGrantsFor(np: ConnectedNonprofit): Promise<NonprofitGrantsBlock> {
+  return lookupGrants({
+    name: np.name,
+    mission: np.mission,
+    programs: np.programs,
+    populations: np.populations,
+    location: np.location ?? undefined,
+  });
+}
+
+/**
+ * Build a grant-search profile for the parent entity itself, falling back to
+ * its display fields when the agent didn't populate the grant-specific ones.
+ */
+function lookupGrantsForParent(parent: ParentProfile): Promise<NonprofitGrantsBlock> {
+  return lookupGrants({
+    name: parent.name,
+    mission: parent.mission?.trim() || parent.description,
+    programs: parent.programs?.length ? parent.programs : parent.givingPrograms,
+    populations: parent.populations,
+    location: parent.location ?? undefined,
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -207,16 +226,20 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Fan out GG searches in parallel — one failure must not kill the rest.
-  const enriched = await Promise.all(
-    research.nonprofits.map(async (np) => ({
-      ...np,
-      grants: await lookupGrantsFor(np),
-    }))
-  );
+  // Fan out GG searches in parallel — for the parent itself and every tied
+  // nonprofit. One failure must not kill the rest.
+  const [parentGrants, enriched] = await Promise.all([
+    lookupGrantsForParent(research.parent),
+    Promise.all(
+      research.nonprofits.map(async (np) => ({
+        ...np,
+        grants: await lookupGrantsFor(np),
+      }))
+    ),
+  ]);
 
   const response: RadarResponse = {
-    parent: research.parent,
+    parent: { ...research.parent, grants: parentGrants },
     summary: research.summary,
     nonprofits: enriched,
   };
