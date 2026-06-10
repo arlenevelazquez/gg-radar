@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { runResearch } from "@/lib/agent/research";
 import { searchGrants } from "@/lib/grant-guru/client";
 import { buildSearchBody, type NonprofitProfile } from "@/lib/grant-guru/prompt";
+import { enrich990, type Form990Block } from "@/lib/propublica/client";
 import type { ConnectedNonprofit, ParentProfile } from "@/lib/agent/types";
 import type { GrantGuruGrant } from "@/lib/grant-guru/types";
 
@@ -52,10 +53,15 @@ export interface NonprofitGrantsBlock {
 }
 
 export interface RadarResponse {
-  /** Parent entity profile, enriched with a federal-grant search run on the parent itself. */
-  parent: ParentProfile & { grants: NonprofitGrantsBlock };
+  /**
+   * Parent entity profile, enriched with a federal-grant search run on the
+   * parent itself plus its latest-990 financials (when it's a filing nonprofit).
+   */
+  parent: ParentProfile & { grants: NonprofitGrantsBlock; financials?: Form990Block };
   summary: string;
-  nonprofits: Array<ConnectedNonprofit & { grants: NonprofitGrantsBlock }>;
+  nonprofits: Array<
+    ConnectedNonprofit & { grants: NonprofitGrantsBlock; financials?: Form990Block }
+  >;
 }
 
 const TOP_PER_NONPROFIT = 10;
@@ -226,20 +232,25 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Fan out GG searches in parallel — for the parent itself and every tied
-  // nonprofit. One failure must not kill the rest.
-  const [parentGrants, enriched] = await Promise.all([
+  // Fan out in parallel — for the parent itself and every tied nonprofit, run
+  // the GrantGuru search and the ProPublica 990 lookup concurrently. Each call
+  // fails soft, so one error never kills the rest.
+  const [parentGrants, parentFinancials, enriched] = await Promise.all([
     lookupGrantsForParent(research.parent),
+    enrich990(research.parent.name),
     Promise.all(
-      research.nonprofits.map(async (np) => ({
-        ...np,
-        grants: await lookupGrantsFor(np),
-      }))
+      research.nonprofits.map(async (np) => {
+        const [grants, financials] = await Promise.all([
+          lookupGrantsFor(np),
+          enrich990(np.name),
+        ]);
+        return { ...np, grants, financials };
+      })
     ),
   ]);
 
   const response: RadarResponse = {
-    parent: { ...research.parent, grants: parentGrants },
+    parent: { ...research.parent, grants: parentGrants, financials: parentFinancials },
     summary: research.summary,
     nonprofits: enriched,
   };

@@ -150,6 +150,23 @@ const FIXTURE: RadarResponse = {
           },
         ],
       },
+      financials: {
+        status: "matched",
+        chosen: { ein: "26-2343206", name: "Chick Fil A Foundation Inc", state: "GA" },
+        candidates: [
+          { ein: "26-2343206", name: "Chick Fil A Foundation Inc", state: "GA" },
+        ],
+        financials: {
+          fiscalYear: 2020,
+          formType: "990-PF",
+          totalRevenue: 11104322,
+          totalExpenses: 11557454,
+          totalAssets: 279336,
+          totalLiabilities: 55648,
+          grantsPaid: 9800000,
+          pdfUrl: "https://projects.propublica.org/nonprofits/organizations/262343206",
+        },
+      },
     },
     {
       name: "WinShape Foundation",

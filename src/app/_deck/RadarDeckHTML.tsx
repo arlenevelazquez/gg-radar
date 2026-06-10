@@ -1,4 +1,4 @@
-import type { BriefGrantsBlock, BriefNonprofit, RadarBrief } from "@/lib/export/brief";
+import type { Brief990, BriefGrantsBlock, BriefNonprofit, RadarBrief } from "@/lib/export/brief";
 import { MATCH_QUALITY_LABEL } from "@/lib/export/labels";
 
 /**
@@ -303,6 +303,19 @@ html, body {
   border-radius: 4px;
 }
 
+.np-990 {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--pale);
+  border: 1px solid #B6E4DA;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 0 0 16px;
+}
+.np-990 strong { color: var(--primary); font-weight: 600; }
+.np-990 .np-990-meta { color: var(--muted); }
+
 .grants-block-label {
   font-size: 11px;
   color: var(--muted);
@@ -580,6 +593,25 @@ function GrantsSection({ block }: { block: BriefGrantsBlock }) {
   );
 }
 
+/** Compact latest-990 financials line. Shared by parent + nonprofit slides. */
+function Financials990Line({ data }: { data: Brief990 | null }) {
+  if (!data) return null;
+  const parts: string[] = [];
+  if (data.totalRevenue !== null) parts.push(`Revenue ${formatCurrencyShort(data.totalRevenue)}`);
+  if (data.totalExpenses !== null) parts.push(`Expenses ${formatCurrencyShort(data.totalExpenses)}`);
+  if (data.totalAssets !== null) parts.push(`Assets ${formatCurrencyShort(data.totalAssets)}`);
+  if (data.grantsPaid !== null) parts.push(`Grants paid ${formatCurrencyShort(data.grantsPaid)}`);
+  const label = `Latest 990${data.fiscalYear ? ` · FY ${data.fiscalYear}` : ""}${
+    data.formType ? ` · Form ${data.formType}` : ""
+  }`;
+  return (
+    <p className="np-990">
+      <strong>{label}:</strong> {parts.join(" · ")}{" "}
+      <span className="np-990-meta">· EIN {data.ein} · via ProPublica</span>
+    </p>
+  );
+}
+
 /** Grant results for the parent entity itself. */
 function ParentGrantsSlide({ brief }: { brief: RadarBrief }) {
   const p = brief.parent;
@@ -603,6 +635,7 @@ function ParentGrantsSlide({ brief }: { brief: RadarBrief }) {
             ))}
           </div>
         )}
+        <Financials990Line data={p.financials} />
         <GrantsSection block={p.grants} />
       </div>
     </section>
@@ -631,6 +664,7 @@ function NonprofitSlide({ brief, np }: { brief: RadarBrief; np: BriefNonprofit }
             ))}
           </div>
         )}
+        <Financials990Line data={np.financials} />
         <GrantsSection block={np} />
       </div>
     </section>
