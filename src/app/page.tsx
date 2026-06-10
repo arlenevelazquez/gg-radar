@@ -229,18 +229,20 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="flex items-start gap-6">
-                  <div className="text-right">
-                    <p className="text-xs uppercase tracking-widest text-gray-500 mb-1">
-                      Connected nonprofits
-                    </p>
-                    <p className="font-display text-4xl text-brand-600">
-                      {result.nonprofits.length}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {totalQualified.toLocaleString("en-US")} qualified federal grant
-                      {totalQualified === 1 ? "" : "s"}
-                    </p>
-                  </div>
+                  {result.nonprofits.length > 0 && (
+                    <div className="text-right">
+                      <p className="text-xs uppercase tracking-widest text-gray-500 mb-1">
+                        Connected nonprofits
+                      </p>
+                      <p className="font-display text-4xl text-brand-600">
+                        {result.nonprofits.length}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {totalQualified.toLocaleString("en-US")} qualified federal grant
+                        {totalQualified === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                  )}
                   <ExportButtons response={result} />
                 </div>
               </div>
