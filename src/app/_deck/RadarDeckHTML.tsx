@@ -494,10 +494,12 @@ function TitleSlide({ brief }: { brief: RadarBrief }) {
         )}
         {brief.summary && <p className="title-summary">{brief.summary}</p>}
         <div className="totals-row">
-          <div className="total-stat">
-            <p className="total-stat-label">Tied nonprofits</p>
-            <p className="total-stat-value">{brief.totals.nonprofitCount}</p>
-          </div>
+          {brief.totals.nonprofitCount > 0 && (
+            <div className="total-stat">
+              <p className="total-stat-label">Tied nonprofits</p>
+              <p className="total-stat-value">{brief.totals.nonprofitCount}</p>
+            </div>
+          )}
           <div className="total-stat">
             <p className="total-stat-label">Qualified federal grants</p>
             <p className="total-stat-value">{brief.totals.qualifiedGrantCount}</p>

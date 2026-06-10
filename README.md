@@ -24,6 +24,7 @@ Enter a parent company (corporation, foundation, family office), and Radar:
 - **React 19** + Tailwind CSS 4
 - **AI SDK v6** + Claude Haiku 4.5 (via Vercel AI Gateway or direct Anthropic)
 - **GrantGuru** REST API (production, encrypted endpoints via AES-256-GCM)
+- **Playwright** headless Chromium — renders the deck to PDF (`@sparticuz/chromium` on Vercel)
 - **Supabase** (Postgres) — pre-staged for the shareable-link export feature
 - **TypeScript** + ESLint
 
@@ -35,17 +36,28 @@ Enter a parent company (corporation, foundation, family office), and Radar:
 # 1. Install deps
 npm install
 
-# 2. Copy the env template and fill in real values
+# 2. Download the Chromium binary used by the PDF export (one-time, per machine)
+npx playwright install chromium
+
+# 3. Copy the env template and fill in real values
 cp .env.local.example .env.local
 # then edit .env.local — see "Environment" below
 
-# 3. Run the dev server
+# 4. Run the dev server
 npm run dev
 ```
 
 Open <http://localhost:3000>, type a parent company name (try "Chick-fil-A",
 "McDonald's", "Walmart"), and hit Run Grant Radar. Expect 30–60 seconds for
 the agent to research + fan out GrantGuru queries.
+
+> **PDF export (local dev):** the "Download PDF" button renders the deck with
+> headless Chromium via Playwright. `npm install` pulls the Playwright package
+> but **not** the browser binary, so step 2 above is required — otherwise the
+> export fails with `browserType.launch: Executable doesn't exist …`. The
+> binary lives in your user cache (`~/Library/Caches/ms-playwright`), not the
+> repo, so each machine runs it once. On Vercel this is handled separately via
+> `@sparticuz/chromium` and needs no extra step.
 
 ---
 
