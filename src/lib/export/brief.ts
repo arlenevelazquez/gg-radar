@@ -4,6 +4,7 @@ import type {
   RadarResponse,
   TopGrant,
 } from "@/app/api/radar/route";
+import type { Form990Block } from "@/lib/propublica/client";
 import type { NonprofitProfile } from "@/lib/grant-guru/prompt";
 import { CONNECTION_LABEL, PARENT_TYPE_LABEL } from "./labels";
 
@@ -28,6 +29,18 @@ export interface BriefGrantsBlock {
   grantsError: string | null;
 }
 
+/** Compact latest-990 summary for the export surfaces. Null when unmatched. */
+export interface Brief990 {
+  ein: string;
+  fiscalYear: number | null;
+  formType: string | null;
+  totalRevenue: number | null;
+  totalExpenses: number | null;
+  totalAssets: number | null;
+  grantsPaid: number | null;
+  pdfUrl: string | null;
+}
+
 export interface BriefNonprofit extends BriefGrantsBlock {
   name: string;
   connectionLabel: string;
@@ -36,6 +49,7 @@ export interface BriefNonprofit extends BriefGrantsBlock {
   relationship: string;
   programs: string[];
   populations: string[];
+  financials: Brief990 | null;
 }
 
 export interface RadarBrief {
@@ -55,6 +69,8 @@ export interface RadarBrief {
     location: string;
     /** Federal-grant results for the parent entity itself. */
     grants: BriefGrantsBlock;
+    /** Latest-990 financials for the parent, when it's a filing nonprofit. */
+    financials: Brief990 | null;
   };
   summary: string;
   totals: {
@@ -88,6 +104,21 @@ function mapGrant(g: TopGrant, idx: number): BriefGrant {
   };
 }
 
+function map990(block: Form990Block | undefined): Brief990 | null {
+  if (!block || block.status !== "matched" || !block.chosen || !block.financials) return null;
+  const f = block.financials;
+  return {
+    ein: block.chosen.ein,
+    fiscalYear: f.fiscalYear,
+    formType: f.formType,
+    totalRevenue: f.totalRevenue,
+    totalExpenses: f.totalExpenses,
+    totalAssets: f.totalAssets,
+    grantsPaid: f.grantsPaid,
+    pdfUrl: f.pdfUrl,
+  };
+}
+
 function mapGrantsBlock(grants: NonprofitGrantsBlock): BriefGrantsBlock {
   return {
     qualifiedCount: grants.status === "ok" ? grants.qualifiedCount : 0,
@@ -109,6 +140,7 @@ export function deriveBrief(
     relationship: np.relationship,
     programs: np.programs,
     populations: np.populations ?? [],
+    financials: map990(np.financials),
     ...mapGrantsBlock(np.grants),
   }));
 
@@ -128,6 +160,7 @@ export function deriveBrief(
         : response.parent.givingPrograms,
       location: locationText(response.parent.location ?? undefined),
       grants: mapGrantsBlock(response.parent.grants),
+      financials: map990(response.parent.financials),
     },
     summary: response.summary,
     totals: {

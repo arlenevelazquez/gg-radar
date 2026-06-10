@@ -26,6 +26,29 @@ interface GrantsBlock {
   error?: string;
 }
 
+interface Ein990Candidate {
+  ein: string;
+  name: string;
+  state: string | null;
+}
+
+interface Form990Block {
+  status: "matched" | "unmatched" | "error";
+  chosen: Ein990Candidate | null;
+  candidates: Ein990Candidate[];
+  financials: {
+    fiscalYear: number | null;
+    formType: "990" | "990-EZ" | "990-PF" | "other" | null;
+    totalRevenue: number | null;
+    totalExpenses: number | null;
+    totalAssets: number | null;
+    totalLiabilities: number | null;
+    grantsPaid: number | null;
+    pdfUrl: string | null;
+  } | null;
+  error?: string;
+}
+
 type MatchQuality = "excellent" | "good" | "possible" | "weak";
 
 interface TopGrant {
@@ -51,6 +74,7 @@ interface Nonprofit {
   relationship: string;
   connectionType: "corporate_foundation" | "family_foundation" | "affiliated_nonprofit" | "other";
   grants: GrantsBlock;
+  financials?: Form990Block;
 }
 
 function formatCurrencyShort(amount: number): string {
@@ -90,9 +114,16 @@ const QUALITY_BADGE: Record<MatchQuality, { label: string; className: string }> 
 };
 
 interface RadarResponse {
-  parent: ParentProfile & { grants: GrantsBlock };
+  parent: ParentProfile & { grants: GrantsBlock; financials?: Form990Block };
   summary: string;
   nonprofits: Nonprofit[];
+}
+
+interface EntityCandidate {
+  label: string;
+  detail: string;
+  query: string;
+  kind: "corporation" | "foundation" | "individual" | "family" | "holding_company" | "other";
 }
 
 const PARENT_TYPE_LABEL: Record<ParentProfile["type"], string> = {
@@ -124,6 +155,8 @@ function nonprofitAnchorId(name: string): string {
 export default function Home() {
   const [parentName, setParentName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [candidates, setCandidates] = useState<EntityCandidate[] | null>(null);
   const [result, setResult] = useState<RadarResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Defer empty-input gating until after mount so SSR/CSR render the same
@@ -134,18 +167,17 @@ export default function Home() {
     () => false
   );
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!parentName.trim()) return;
+  /** Run the full radar pipeline on an (already disambiguated) entity query. */
+  async function runRadar(query: string) {
+    setCandidates(null);
     setLoading(true);
     setResult(null);
     setError(null);
-
     try {
       const res = await fetch("/api/radar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parent: parentName.trim() }),
+        body: JSON.stringify({ parent: query }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -157,6 +189,42 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const q = parentName.trim();
+    if (!q) return;
+    setResult(null);
+    setError(null);
+    setCandidates(null);
+    setResolving(true);
+
+    // "Did you mean?" pre-step: resolve the query into candidate entities.
+    // 1 candidate → research it directly. >1 → let the user pick. On any
+    // failure, fall back to researching the raw input so we never block.
+    let chosen = q;
+    try {
+      const res = await fetch("/api/radar/resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parent: q }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { candidates?: EntityCandidate[] };
+        const cands = data.candidates ?? [];
+        if (cands.length > 1) {
+          setCandidates(cands);
+          setResolving(false);
+          return;
+        }
+        if (cands.length === 1) chosen = cands[0].query;
+      }
+    } catch {
+      // fall through and research the raw input
+    }
+    setResolving(false);
+    await runRadar(chosen);
   }
 
   const totalQualified =
@@ -185,16 +253,27 @@ export default function Home() {
             onChange={(e) => setParentName(e.target.value)}
             placeholder="Enter a parent company, foundation, or family office"
             className="flex-1 bg-white border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600 transition-colors"
-            disabled={loading}
+            disabled={loading || resolving}
           />
           <button
             type="submit"
-            disabled={loading || (hasMounted && !parentName.trim())}
+            disabled={loading || resolving || (hasMounted && !parentName.trim())}
             className="bg-brand-600 hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium px-6 py-3 rounded-lg transition-colors whitespace-nowrap"
           >
             Run Grant Radar
           </button>
         </form>
+
+        {resolving && (
+          <div className="text-center py-20">
+            <div className="inline-block w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p className="text-gray-500">Identifying the entity…</p>
+          </div>
+        )}
+
+        {candidates && !loading && !resolving && (
+          <DisambiguationPicker candidates={candidates} onPick={runRadar} />
+        )}
 
         {loading && (
           <div className="text-center py-20">
@@ -338,6 +417,38 @@ export default function Home() {
   );
 }
 
+function DisambiguationPicker({
+  candidates,
+  onPick,
+}: {
+  candidates: EntityCandidate[];
+  onPick: (query: string) => void;
+}) {
+  return (
+    <div className="mb-12">
+      <p className="text-sm text-gray-700 mb-1 font-medium">
+        More than one entity matches that name — which did you mean?
+      </p>
+      <p className="text-xs text-gray-500 mb-4">
+        Pick one to run Grant Radar on the right organization.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {candidates.map((c) => (
+          <button
+            key={c.query}
+            type="button"
+            onClick={() => onPick(c.query)}
+            className="text-left bg-white border border-gray-200 hover:border-brand-300 hover:bg-brand-50/60 rounded-lg p-4 transition-colors"
+          >
+            <p className="font-medium text-gray-900 leading-snug">{c.label}</p>
+            <p className="text-xs text-gray-500 mt-1 leading-snug">{c.detail}</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function EcosystemMap({
   parent,
   nonprofits,
@@ -475,8 +586,68 @@ function GrantsDetail({ grants }: { grants: GrantsBlock }) {
   );
 }
 
+/** Latest-990 financials from ProPublica. Shared by parent + nonprofit cards. */
+function Financials990({ data }: { data?: Form990Block }) {
+  if (!data || data.status !== "matched" || !data.financials || !data.chosen) return null;
+  const f = data.financials;
+  const stats: Array<[string, number | null]> = [
+    ["Revenue", f.totalRevenue],
+    ["Expenses", f.totalExpenses],
+    ["Assets", f.totalAssets],
+  ];
+  if (f.grantsPaid !== null) stats.push(["Grants paid", f.grantsPaid]);
+  const otherCount = data.candidates.length - 1;
+
+  return (
+    <div className="pt-4 border-t border-gray-100">
+      <div className="flex items-baseline justify-between mb-2">
+        <p className="text-xs uppercase tracking-widest text-gray-500">
+          Financials{f.fiscalYear ? ` · FY ${f.fiscalYear}` : ""}
+        </p>
+        {f.formType && (
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border bg-gray-50 text-gray-600 border-gray-200">
+            Form {f.formType}
+          </span>
+        )}
+      </div>
+      <dl className={`grid gap-2 mb-2 ${stats.length === 4 ? "grid-cols-4" : "grid-cols-3"}`}>
+        {stats.map(([label, value]) => (
+          <div key={label} className="text-center">
+            <dd className="font-display text-base text-gray-900 leading-none">
+              {value === null ? "—" : formatCurrencyShort(value)}
+            </dd>
+            <dt className="text-[10px] uppercase tracking-wider text-gray-400 mt-1">{label}</dt>
+          </div>
+        ))}
+      </dl>
+      <p className="text-[10px] text-gray-400 leading-snug">
+        EIN {data.chosen.ein}
+        {otherCount > 0 && ` · +${otherCount} other candidate${otherCount === 1 ? "" : "s"}`}
+        {f.pdfUrl && (
+          <>
+            {" · "}
+            <a
+              href={f.pdfUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-brand-600 hover:text-brand-700 underline"
+            >
+              View 990 ↗
+            </a>
+          </>
+        )}
+        {" · via ProPublica"}
+      </p>
+    </div>
+  );
+}
+
 /** Grant results for the parent entity itself, rendered as its own distinct card. */
-function ParentCard({ parent }: { parent: ParentProfile & { grants: GrantsBlock } }) {
+function ParentCard({
+  parent,
+}: {
+  parent: ParentProfile & { grants: GrantsBlock; financials?: Form990Block };
+}) {
   const programs = parent.programs ?? [];
   return (
     <article
@@ -518,6 +689,7 @@ function ParentCard({ parent }: { parent: ParentProfile & { grants: GrantsBlock 
       <div className="pt-4 border-t border-gray-100">
         <GrantsDetail grants={parent.grants} />
       </div>
+      <Financials990 data={parent.financials} />
     </article>
   );
 }
@@ -557,6 +729,7 @@ function NonprofitCard({ np }: { np: Nonprofit }) {
       <div className="pt-4 border-t border-gray-100">
         <GrantsDetail grants={np.grants} />
       </div>
+      <Financials990 data={np.financials} />
     </article>
   );
 }
